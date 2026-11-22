@@ -291,8 +291,23 @@ function friendlyError(e) {
   return s;
 }
 
+// 갤럭시의 삼성 인터넷·카톡 안 브라우저에서는 웹앱 설치가 막히는 일이 많아서 크롬으로 안내
+function browserHintHTML() {
+  const ua = navigator.userAgent;
+  if (!/Android/i.test(ua) || sessionStorage.getItem('browserHintOff')) return '';
+  if (matchMedia('(display-mode: standalone)').matches) return '';
+  const where = /KAKAOTALK/i.test(ua) ? '카카오톡 안' : /SamsungBrowser/i.test(ua) ? '삼성 인터넷' : '';
+  if (!where) return '';
+  const play = encodeURIComponent('https://play.google.com/store/apps/details?id=com.android.chrome');
+  const chrome = `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${play};end`;
+  return `<div class="banner warn">${I.down}<span class="grow"><b>${where}</b>에서는 앱 설치가 잘 안 돼요. <b>크롬</b>에서 설치해 주세요</span>
+    <a class="btn sm primary" href="${chrome}">크롬에서 열기</a>
+    <button class="icon-btn sm" data-act="browser-hint-off" aria-label="닫기">${I.x}</button></div>`;
+}
+
 function bannersHTML(k, d) {
-  let h = '';
+  const hint = browserHintHTML();
+  let h = hint;
   const st = store.status;
   if (st.hasConfig && !st.user && !sessionStorage.getItem('loginLater')) {
     h += `<div class="banner login">${I.repeat}<span class="grow"><b>구글 로그인</b>하면 핸드폰·패드·노트북이 연결돼요</span>
@@ -301,7 +316,7 @@ function bannersHTML(k, d) {
   } else if (st.mode === 'cloud' && st.error) {
     h += `<div class="banner warn">${I.x}<span class="grow">${esc(friendlyError(st.error))}</span></div>`;
   }
-  if (deferredInstall && !localStorage.getItem('installDismissed')) {
+  if (!hint && deferredInstall && !localStorage.getItem('installDismissed')) {
     h += `<div class="banner">${I.down}<span class="grow">홈 화면에 <b>앱으로 설치</b></span>
       <button class="btn sm primary" data-act="install">설치</button>
       <button class="icon-btn sm" data-act="install-dismiss" aria-label="닫기">${I.x}</button></div>`;
@@ -777,7 +792,7 @@ function openSettings() {
     ? `<p class="ok-line">${I.check}앱으로 실행 중이에요</p>`
     : deferredInstall
       ? '<button class="btn primary" data-act="install">홈 화면에 앱 설치</button>'
-      : `<p class="muted">핸드폰: 크롬 메뉴(⋮) → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b><br>노트북: 크롬·엣지 주소창 오른쪽의 <b>설치</b> 아이콘</p>`;
+      : `<p class="muted">갤럭시: <b>크롬</b>으로 열고 메뉴(⋮) → <b>홈 화면에 추가</b> → <b>설치</b> (삼성 인터넷에서는 설치가 막히는 일이 많아요)<br>아이패드: 사파리 공유(□↑) → <b>홈 화면에 추가</b><br>노트북: 크롬·엣지 주소창 오른쪽의 <b>설치</b> 아이콘</p>`;
   openModal(`<div class="st">
     <div class="ed-head"><h3>설정</h3><button class="icon-btn" data-act="modal-close" aria-label="닫기">${I.x}</button></div>
     <section><h4>기기 연동</h4>${sync}</section>
@@ -1150,6 +1165,7 @@ function onClick(e) {
     case 'install': doInstall(); break;
     case 'install-dismiss': localStorage.setItem('installDismissed', '1'); render(); break;
     case 'login-later': sessionStorage.setItem('loginLater', '1'); render(); break;
+    case 'browser-hint-off': sessionStorage.setItem('browserHintOff', '1'); render(); break;
     case 'memo-save': saveMemo(k); break;
     case 'photo':
       S.photoTarget = { date: k, noteId: a.dataset.note || null };
