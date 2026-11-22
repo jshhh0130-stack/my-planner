@@ -31,6 +31,8 @@ const I = {
   down: svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
   repeat: svg('<path d="M4.5 11V9.5a4 4 0 014-4H18M15 2.5l3 3-3 3M19.5 13v1.5a4 4 0 01-4 4H6M9 21.5l-3-3 3-3"/>'),
   pen: svg('<path d="M4 20l1.2-4.6L15.6 5a2.1 2.1 0 013 3L8.2 18.4z"/><path d="M13.8 6.8l3 3"/>'),
+  expand: svg('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+  shrink: svg('<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>'),
 };
 
 const isPhone = () => matchMedia('(max-width: 760px)').matches;
@@ -54,6 +56,8 @@ const S = {
   rec: { q: '', filter: 'all', limit: 20 },
   memoDays: 14,
   pen: localStorage.getItem('penMode') === '1', // 시간표 펜(S펜) 필기 모드
+  full: false, // 시간표 전체 보기
+  fullHour: +localStorage.getItem('fullHour') || 80, // 전체 보기에서 한 시간 칸 높이(확대)
 };
 
 let pendingRender = false;
@@ -84,7 +88,8 @@ function eventsOn(k) {
   return ext.length ? [...mine, ...ext].sort(evSort) : mine;
 }
 // 불러온 일정은 그 캘린더의 색으로
-const extVars = (e) => (e.ext ? `--c:${e.extColor};--c-bg:${e.extColor}1a;--c-ink:#2a2f36;` : '');
+// 하루 종일은 진한 색 막대, 시간이 정해진 일정은 연한 색 바탕 (파랑: 저장 버튼과 같은 색)
+const extVars = (e) => (e.ext ? `--c:${e.extColor};--c-bg:${e.extColor === '#d24a4a' ? '#fbe9e9' : '#e8eef9'};--c-ink:${e.extColor === '#d24a4a' ? '#7d2020' : '#24406f'};` : '');
 const extAttr = (e) => (e.ext ? ` style="${extVars(e)}"` : '');
 const extCls = (e) => (e.ext ? ' ext' : '');
 // 목록에 쓰는 시간 글자 (여러 날 일정은 이어짐 표시)
@@ -269,12 +274,16 @@ function todayHTML() {
       <h3 class="label">메모<small>글 · 사진 · 지난 메모까지 이어서</small></h3>
       ${memoHTML(k, { feed: true })}
     </section>
-    <section class="col col-schedule ${S.pen ? 'pen-on' : ''}">
-      <h3 class="label">시간표<button class="mini pen-btn ${S.pen ? 'on' : ''}" data-act="pen-toggle" title="펜으로 시간표에 자유롭게 쓰기">${I.pen}펜</button><button class="mini" data-act="new-event" data-date="${k}">${I.plus}일정</button></h3>
+    <section class="col col-schedule ${S.pen ? 'pen-on' : ''}" ${S.full ? `data-keep-scroll="full" style="--full-hour:${S.fullHour}px"` : ''}>
+      <h3 class="label">${S.full
+        ? `<button class="icon-btn sm" data-act="day-move" data-n="-1" aria-label="어제">${I.left}</button><span class="full-date">${md(k)} (${WD[wdIdx(k)]})</span><button class="icon-btn sm" data-act="day-move" data-n="1" aria-label="내일">${I.right}</button>`
+        : '시간표'}<button class="mini pen-btn ${S.pen ? 'on' : ''}" data-act="pen-toggle" title="펜으로 시간표에 자유롭게 쓰기">${I.pen}펜</button>${S.full
+        ? `<button class="mini" data-act="zoom" data-n="-1" aria-label="작게">－</button><button class="mini" data-act="zoom" data-n="1" aria-label="크게">＋</button>`
+        : ''}<button class="mini" data-act="new-event" data-date="${k}">${I.plus}일정</button><button class="mini full-btn" data-act="full-toggle">${S.full ? `${I.shrink}닫기` : `${I.expand}전체 보기`}</button></h3>
       ${S.pen ? penBarHTML() : ''}
       ${allDayHTML(k)}
       ${timeGridHTML([k], { ink: true })}
-      <p class="hint">${S.pen ? '펜으로 자유롭게 쓰세요 · 손가락으로는 화면을 내려요 · 다 쓰면 완료' : `빈 칸을 누르면 바로 적혀요 · ${isPhone() ? '일정을 꾹 누르면 옮길 수 있어요' : '일정은 끌어서 옮기고, 아래 끝을 당겨 길이 조절'} · 펜 버튼으로 손글씨`}</p>
+      <p class="hint">${S.pen ? '펜으로 자유롭게 쓰세요 · 펜 옆 버튼을 누른 채 문지르면 지우개 · 손가락으로는 화면을 내려요 · 다 쓰면 완료' : `빈 칸을 누르면 바로 적혀요 · ${isPhone() ? '일정을 꾹 누르면 옮길 수 있어요' : '일정은 끌어서 옮기고, 아래 끝을 당겨 길이 조절'} · 펜 버튼으로 손글씨`}</p>
     </section>
   </div>`;
 }
@@ -1532,7 +1541,13 @@ function onClick(e) {
       flushInk();
       if (S.pen && isPhone()) S.pane = 'schedule';
       render();
-      if (S.pen) toast('펜으로 시간표에 자유롭게 쓰세요 · 손가락은 화면 이동');
+      if (S.pen) toast('펜으로 자유롭게 쓰세요 · 펜 버튼 누르고 문지르면 지우개');
+      break;
+    case 'full-toggle': setFull(!S.full); break;
+    case 'zoom':
+      S.fullHour = clamp(S.fullHour + 16 * +a.dataset.n, 48, 176);
+      localStorage.setItem('fullHour', String(S.fullHour));
+      render();
       break;
     case 'ink-color': INK.color = a.dataset.c; INK.eraser = false; localStorage.setItem('inkColor', INK.color); updatePenBar(); break;
     case 'ink-eraser': INK.eraser = !INK.eraser; updatePenBar(); break;
@@ -1948,6 +1963,9 @@ function inkEnd() {
   scheduleInkSave();
 }
 
+// 전체 보기일 때는 시간표 칸 자체가, 아니면 화면 전체가 스크롤됨
+const scrollTarget = () => (S.full && $view.querySelector('.col-schedule')) || window;
+
 // 손가락으로 화면 내리기 (펜 모드에서는 필기 칸이 터치를 받으므로 직접 스크롤)
 function fingerScroll(e) {
   cancelAnimationFrame(INK.fling);
@@ -1961,7 +1979,7 @@ function fingerScroll(e) {
     v = dy / Math.max(1, now - lastT);
     lastY = m.clientY;
     lastT = now;
-    window.scrollBy(0, dy);
+    scrollTarget().scrollBy(0, dy);
   };
   const cleanup = () => {
     removeEventListener('pointermove', move);
@@ -1974,7 +1992,7 @@ function fingerScroll(e) {
     let vel = v * 16;
     const step = () => {
       if (Math.abs(vel) < 0.5) return;
-      window.scrollBy(0, vel);
+      scrollTarget().scrollBy(0, vel);
       vel *= 0.94;
       INK.fling = requestAnimationFrame(step);
     };
@@ -1987,6 +2005,7 @@ function fingerScroll(e) {
 
 function inkDown(e) {
   if (!S.pen || !INK.canvas) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
   const touch = e.pointerType === 'touch';
   if (touch && Date.now() - INK.lastPen < 700) { e.preventDefault(); return; } // 펜으로 쓰는 중 닿은 손바닥은 무시
   if (touch && !INK.finger) { fingerScroll(e); return; }
@@ -1995,12 +2014,22 @@ function inkDown(e) {
   try { INK.canvas.setPointerCapture(e.pointerId); } catch { /* 무시 */ }
   sizeInk();
   const pt = inkPoint(e);
-  if (INK.eraser) { INK.cur = { erase: true, removed: [] }; eraseAt(pt); }
-  else INK.cur = { c: INK.color, w: 2.4, pts: [pt] };
+  if (INK.eraser || penButton(e)) {
+    INK.cur = { erase: true, removed: [] };
+    if (inContact(e)) eraseAt(pt);
+  } else INK.cur = { c: INK.color, w: 2.4, pts: [pt] };
   const cv = INK.canvas;
   const move = (m) => {
-    if (m.pointerId !== e.pointerId) return;
+    if (m.pointerId !== e.pointerId || !INK.cur) return;
     if (m.pointerType === 'pen') INK.lastPen = Date.now();
+    // 쓰다가 펜 옆 버튼을 누르면 그때부터 지우개
+    if (!INK.cur.erase && penButton(m)) {
+      const cur = INK.cur;
+      if (cur.pts.length > 1) { INK.strokes.push(cur); INK.ops.push({ t: 'add', s: cur }); scheduleInkSave(); }
+      INK.cur = { erase: true, removed: [] };
+      drawInk();
+    }
+    if (INK.cur.erase && !inContact(m)) return; // 펜이 화면에서 떠 있을 때는 안 지움
     const list = m.getCoalescedEvents ? m.getCoalescedEvents() : [];
     for (const c of list.length ? list : [m]) inkMove(inkPoint(c));
   };
@@ -2018,6 +2047,34 @@ function inkDown(e) {
   cv.addEventListener('pointermove', move);
   addEventListener('pointerup', up);
   addEventListener('pointercancel', up);
+}
+
+// S펜 옆 버튼(또는 지우개 끝)을 누른 채 문지르면 지우개
+const penButton = (e) => e.pointerType === 'pen' && ((e.buttons & 34) !== 0 || e.button === 2 || e.button === 5);
+const inContact = (e) => e.pointerType !== 'pen' || e.pressure > 0 || (e.buttons & 1) === 1;
+
+// 시간표 전체 보기 (핸드폰 뒤로 가기로도 닫힘)
+function setFull(on, fromPop = false) {
+  if (S.full === on) return;
+  S.full = on;
+  document.body.classList.toggle('sched-full', on);
+  if (on) {
+    history.pushState({ full: 1 }, '');
+    if (isPhone()) S.pane = 'schedule';
+  } else if (!fromPop && history.state?.full) {
+    skipPop = true;
+    history.back();
+  }
+  render();
+  if (on) {
+    requestAnimationFrame(() => {
+      const box = $view.querySelector('.col-schedule');
+      const col = box?.querySelector('.tg-col');
+      if (!box || !col) return;
+      const m = S.date === todayKey() ? clamp(nowMin() - 90, H0 * 60, H1 * 60) : 8 * 60;
+      box.scrollTop = Math.max(0, col.offsetTop + ((m - H0 * 60) / TOTAL) * col.offsetHeight - 70);
+    });
+  }
 }
 
 function inkUndo() {
@@ -2310,6 +2367,7 @@ function bindEvents() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal) { closeModal(); return; }
+    if (e.key === 'Escape' && S.full) { setFull(false); return; }
     if (modal || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target.matches?.('input, textarea, select')) return;
     if (S.view === 'today') {
@@ -2325,6 +2383,7 @@ function bindEvents() {
   window.addEventListener('popstate', () => {
     if (skipPop) { skipPop = false; return; }
     if (modal) { closeModal(true); return; }
+    if (S.full) { setFull(false, true); return; } // 뒤로 가기 = 전체 보기 닫기
     const v = viewFromHash();
     if (v !== S.view) {
       S.view = v;

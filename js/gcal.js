@@ -7,6 +7,11 @@ export const STALE_MS = 3 * 60 * 1000; // 앱을 열거나 캘린더 탭을 열 
 
 export const safeColor = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#4a6fb5');
 
+// 불러온 일정 색: 캘린더마다 제각각인 색(민트 등) 대신 앱의 파랑으로 통일, 공휴일만 빨강
+export const EXT_BLUE = '#3f5fa8';
+export const EXT_RED = '#d24a4a';
+const isHolidayCal = (cal) => /holiday/i.test(cal.id || '') || /휴일|공휴일|holiday/i.test(cal.name || '');
+
 // Apps Script에 붙여 넣을 코드 (key는 앱이 만들어 넣어 줌)
 export function scriptCode(key) {
   return `// 데일리 플래너 ↔ 구글 캘린더 연결 (읽기 전용 · 이 코드는 내 일정을 읽기만 해요)
@@ -62,7 +67,7 @@ function expand(raw, calMap) {
   for (const r of raw) {
     const cal = calMap.get(r.cal) || {};
     const base = {
-      ext: true, cal: r.cal, calName: cal.name || '', extColor: safeColor(cal.color),
+      ext: true, cal: r.cal, calName: cal.name || '', extColor: isHolidayCal(cal) ? EXT_RED : EXT_BLUE,
       title: r.title || '(제목 없음)', location: r.location || '',
       color: 'ext', repeat: 'none', exdates: [], note: '',
     };
