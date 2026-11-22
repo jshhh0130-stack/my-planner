@@ -130,6 +130,7 @@ body[data-view='calendar'] main { max-width: 1800px; }
   background: var(--accent-weak); color: var(--accent-ink); font-size: 14px;
 }
 .banner > svg { width: 19px; height: 19px; }
+.banner.warn { background: #fdeeed; color: #9b3833; }
 .banner b { font-weight: 700; }
 
 .seg { display: flex; gap: 4px; background: var(--bg2); padding: 4px; border-radius: 12px; }

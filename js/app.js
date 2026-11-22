@@ -64,6 +64,7 @@ let composeEnter = null;
 let composeTimer = null;
 let composeDoneAt = 0;
 let runningVersion = null;
+let lastStatusSig = '';
 
 /* ---------------- 작은 도우미 ---------------- */
 const pctOf = (m) => `${((m - H0 * 60) / TOTAL) * 100}%`;
@@ -277,8 +278,29 @@ const taskRowHTML = (t) => `<li class="task ${t.done ? 'done' : ''}">
   <span class="chk-cell"><button class="chk sq ${t.done ? 'on' : ''}" data-act="task-toggle" data-id="${t.id}" aria-label="완료">${I.check}</button></span>
 </li>`;
 
+// 연동 오류를 알아보기 쉬운 말로
+function friendlyError(e) {
+  const s = String(e || '');
+  if (/unauthorized-domain/.test(s)) return 'Firebase → Authentication → 설정 → 승인된 도메인에 jshhh0130-stack.github.io 를 추가해 주세요.';
+  if (/operation-not-allowed/.test(s)) return 'Firebase → Authentication → 로그인 방법에서 Google을 사용 설정해 주세요.';
+  if (/popup-closed-by-user|cancelled-popup-request/.test(s)) return '로그인 창이 닫혔어요. 다시 눌러 주세요.';
+  if (/popup-blocked/.test(s)) return '팝업이 막혔어요. 주소창의 팝업 차단을 풀고 다시 눌러 주세요.';
+  if (/network-request-failed|unavailable/.test(s)) return '인터넷 연결을 확인해 주세요.';
+  if (/permission-denied|insufficient permissions/i.test(s)) return 'Firestore 규칙에 넣은 이메일이 로그인한 구글 계정과 같은지 확인해 주세요. (SETUP.md 3번)';
+  if (/failed-precondition|not-found|does not exist/i.test(s)) return 'Firestore 데이터베이스를 만들어 주세요. (SETUP.md 3번)';
+  return s;
+}
+
 function bannersHTML(k, d) {
   let h = '';
+  const st = store.status;
+  if (st.hasConfig && !st.user && !sessionStorage.getItem('loginLater')) {
+    h += `<div class="banner login">${I.repeat}<span class="grow"><b>구글 로그인</b>하면 핸드폰·패드·노트북이 연결돼요</span>
+      <button class="btn sm primary" data-act="sign-in">Google 로그인</button>
+      <button class="icon-btn sm" data-act="login-later" aria-label="나중에">${I.x}</button></div>`;
+  } else if (st.mode === 'cloud' && st.error) {
+    h += `<div class="banner warn">${I.x}<span class="grow">${esc(friendlyError(st.error))}</span></div>`;
+  }
   if (deferredInstall && !localStorage.getItem('installDismissed')) {
     h += `<div class="banner">${I.down}<span class="grow">홈 화면에 <b>앱으로 설치</b></span>
       <button class="btn sm primary" data-act="install">설치</button>
@@ -741,12 +763,12 @@ function openSettings() {
   if (s.mode === 'cloud' && s.user) {
     sync = `<p class="ok-line">${I.check}<b>${esc(s.user.email)}</b></p>
       <p class="muted">이 구글 계정으로 핸드폰·노트북·패드에서 로그인하면 같은 내용이 바로 보여요.</p>
-      ${s.error ? `<p class="err">문제: ${esc(s.error)}</p>` : ''}
+      ${s.error ? `<p class="err">${esc(friendlyError(s.error))}</p>` : ''}
       <button class="btn" data-act="sign-out">로그아웃</button>`;
   } else if (s.hasConfig) {
     sync = `<p>구글 계정으로 로그인하면 <b>핸드폰·노트북·패드가 실시간으로 연결</b>돼요.</p>
       <button class="btn primary" data-act="sign-in">Google 계정으로 로그인</button>
-      ${s.error ? `<p class="err">${esc(s.error)}</p>` : ''}`;
+      ${s.error ? `<p class="err">${esc(friendlyError(s.error))}</p>` : ''}`;
   } else {
     sync = `<p>지금은 <b>이 기기에만</b> 저장돼요. 인터넷 없이도 써져요.</p>
       <p class="muted">핸드폰·노트북 연동은 Firebase(무료)를 한 번 연결하면 켜져요. <a href="${SETUP_URL}" target="_blank" rel="noopener">연결 방법 보기</a></p>`;
@@ -1053,7 +1075,7 @@ async function signIn() {
     toast('로그인했어요 · 이제 모든 기기가 연결돼요');
   } catch (e) {
     console.error(e);
-    toast(`로그인 실패: ${e.code || e.message}`);
+    toast(friendlyError(e.code || e.message));
   }
 }
 
@@ -1127,6 +1149,7 @@ function onClick(e) {
     case 'carry-dismiss': store.editDay(k, (d) => { d.carryDismissed = true; }); render(); break;
     case 'install': doInstall(); break;
     case 'install-dismiss': localStorage.setItem('installDismissed', '1'); render(); break;
+    case 'login-later': sessionStorage.setItem('loginLater', '1'); render(); break;
     case 'memo-save': saveMemo(k); break;
     case 'photo':
       S.photoTarget = { date: k, noteId: a.dataset.note || null };
@@ -1718,7 +1741,13 @@ async function boot() {
   if (demo) window.__planner = { store, S, render };
   store.on((type) => {
     if (type === 'data') requestRender();
-    else if (type === 'status') renderStatus();
+    else if (type === 'status') {
+      renderStatus();
+      // 로그인·로그아웃·오류가 바뀌면 화면 안내도 다시 그림
+      const s = store.status;
+      const sig = `${s.mode}|${s.hasConfig}|${s.user?.email || ''}|${s.error}`;
+      if (sig !== lastStatusSig) { lastStatusSig = sig; requestRender(); }
+    }
   });
   S.view = viewFromHash();
   bindEvents();
