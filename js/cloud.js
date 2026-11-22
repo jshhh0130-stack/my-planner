@@ -79,7 +79,12 @@ class Cloud {
           this.onError?.(err);
         },
       );
-    this.unsubs = [watch('days', 'date'), watch('events', 'id')];
+    const settings = this.F.onSnapshot(
+      this.ref('meta', 'settings'),
+      (snap) => cb({ settings: snap.exists() ? snap.data() : {} }),
+      (err) => { console.error(err); this.onError?.(err); },
+    );
+    this.unsubs = [watch('days', 'date'), watch('events', 'id'), settings];
   }
   unsubscribe() {
     this.unsubs.forEach((u) => u());
@@ -90,6 +95,7 @@ class Cloud {
   deleteDay(k) { return this.F.deleteDoc(this.ref('days', k)); }
   putEvent(e) { return this.F.setDoc(this.ref('events', e.id), e); }
   deleteEvent(id) { return this.F.deleteDoc(this.ref('events', id)); }
+  putSettings(v) { return this.F.setDoc(this.ref('meta', 'settings'), v); }
   putPhoto(p) { return this.F.setDoc(this.ref('photos', p.id), p); }
   async getPhoto(id) {
     const s = await this.F.getDoc(this.ref('photos', id));

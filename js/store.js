@@ -136,11 +136,13 @@ export class LocalBackend {
 
   // 같은 기기에서 창을 두 개 열어도 서로 맞춰 줌
   async subscribe(cb) {
-    const [days, events] = await Promise.all([this.getAll('days'), this.getAll('events')]);
-    cb({ days, events });
+    const [days, events, s] = await Promise.all([this.getAll('days'), this.getAll('events'), this.get('meta', 'settings')]);
+    cb({ days, events, settings: s?.value || {} });
     if (this.bc) {
       this.bc.onmessage = async ({ data: m }) => {
-        if (m.t === 'day') {
+        if (m.t === 'settings') {
+          cb({ settings: (await this.get('meta', 'settings'))?.value || {} });
+        } else if (m.t === 'day') {
           const d = await this.get('days', m.k);
           cb({ days: [d || { date: m.k, _deleted: true }] });
         } else if (m.t === 'event') {
@@ -156,6 +158,7 @@ export class LocalBackend {
   async deleteDay(k) { await this.del('days', k); this.bc?.postMessage({ t: 'day', k }); }
   async putEvent(e) { await this.put('events', e); this.bc?.postMessage({ t: 'event', k: e.id }); }
   async deleteEvent(id) { await this.del('events', id); this.bc?.postMessage({ t: 'event', k: id }); }
+  async putSettings(v) { await this.put('meta', { key: 'settings', value: v }); this.bc?.postMessage({ t: 'settings' }); }
   putPhoto(p) { return this.put('photos', p); }
   async getPhoto(id) { return (await this.get('photos', id))?.data || null; }
   deletePhoto(id) { return this.del('photos', id); }
@@ -167,6 +170,7 @@ export class Store {
   constructor() {
     this.days = new Map();
     this.events = new Map();
+    this.settings = {};
     this.timers = new Map();
     this.photoCache = new Map();
     this.fns = new Set();
@@ -193,14 +197,19 @@ export class Store {
     this.backend = backend;
     this.days.clear();
     this.events.clear();
+    this.settings = {};
     this.setStatus({ mode: backend.name, error: '' });
     await backend.subscribe((ch) => this.apply(ch));
     this.emit('data');
   }
 
   // 저장소(클라우드·다른 창)에서 온 변경 반영
-  apply({ days = [], events = [] }) {
+  apply({ days = [], events = [], settings }) {
     let changed = false;
+    if (settings && JSON.stringify(settings) !== JSON.stringify(this.settings)) {
+      this.settings = settings;
+      this.emit('settings');
+    }
     for (const raw of days) {
       if (!raw || !raw.date) continue;
       if (this.timers.has(raw.date)) continue; // 지금 이 기기에서 고치는 중인 날은 덮어쓰지 않음
@@ -255,6 +264,13 @@ export class Store {
         this.setStatus({ pending: Math.max(0, this.status.pending - 1), error: String(err?.code || err?.message || err) });
       },
     );
+  }
+
+  /* 설정 (캘린더 연결 등) — 로그인하면 모든 기기에 같이 적용 */
+  saveSettings(patch) {
+    this.settings = { ...this.settings, ...patch };
+    this.track(this.backend.putSettings(this.settings));
+    this.emit('settings');
   }
 
   addNote(k, text, photos = []) {

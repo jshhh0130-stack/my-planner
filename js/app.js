@@ -1,6 +1,7 @@
 // Daily Planner — 화면과 동작
 import { store, LocalBackend, COLORS, isEmptyDay } from './store.js';
 import { firebaseConfig } from './firebase-config.js';
+import { gcal, scriptCode, newKey, gcalErrorText, safeColor } from './gcal.js';
 import {
   pad, keyOf, parseKey, todayKey, addDays, addMonths, dayDiff, wdIdx, WD, WD_FULL, startOfWeek,
   toMin, fromMin, clamp, uid, esc, escRe, hhmm, richText, md, relLabel,
@@ -71,7 +72,19 @@ const pctOf = (m) => `${((m - H0 * 60) / TOTAL) * 100}%`;
 const pctLen = (m) => `${(m / TOTAL) * 100}%`;
 const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 const hasContent = (d) => !!d && (!!d.goal || d.priorities.some((p) => p.text) || d.tasks.length > 0 || d.notes.length > 0);
-const dayHasAny = (k) => hasContent(store.days.get(k)) || store.eventsOn(k).length > 0;
+const dayHasAny = (k) => hasContent(store.days.get(k)) || eventsOn(k).length > 0;
+
+// 플래너 일정 + 구글(삼성) 캘린더에서 불러온 일정
+const evSort = (a, b) => (b.allDay - a.allDay) || a.start.localeCompare(b.start) || a.title.localeCompare(b.title);
+function eventsOn(k) {
+  const mine = store.eventsOn(k);
+  const ext = gcal.eventsOn(k);
+  return ext.length ? [...mine, ...ext].sort(evSort) : mine;
+}
+// 불러온 일정은 그 캘린더의 색으로
+const extVars = (e) => (e.ext ? `--c:${e.extColor};--c-bg:${e.extColor}1a;--c-ink:#2a2f36;` : '');
+const extAttr = (e) => (e.ext ? ` style="${extVars(e)}"` : '');
+const extCls = (e) => (e.ext ? ' ext' : '');
 const wdClass = (i) => (i === 5 ? 'sat' : i === 6 ? 'sun' : '');
 
 function getDraft(k) {
@@ -142,6 +155,7 @@ function render(opts = {}) {
   }
   $view.querySelectorAll('textarea').forEach((t) => { if (t.value) autoGrow(t); });
   hydratePhotos($view);
+  if (gcal.on) gcal.ensure(S.view === 'calendar' ? S.cal.anchor : S.date);
   if (opts.focus) focusEl($view.querySelector(opts.focus));
   renderStatus();
 }
@@ -195,7 +209,7 @@ function todayHTML() {
 
   const pr = d.priorities;
   const prFilled = pr.filter((p) => p.text);
-  const evs = store.eventsOn(k);
+  const evs = eventsOn(k);
   const items = [...prFilled, ...d.tasks.filter((t) => t.text)];
   const showAll = S.showAllPri || pr.slice(5).some((p) => p.text);
 
@@ -342,9 +356,9 @@ function carryItems(k) {
 }
 
 function allDayHTML(k) {
-  const ad = store.eventsOn(k).filter((e) => e.allDay);
+  const ad = eventsOn(k).filter((e) => e.allDay);
   if (!ad.length) return '';
-  return `<div class="allday">${ad.map((e) => `<button class="chip-ev c-${e.color}" data-act="edit-event" data-id="${e.id}" data-date="${k}">${esc(e.title) || '(제목 없음)'}</button>`).join('')}</div>`;
+  return `<div class="allday">${ad.map((e) => `<button class="chip-ev c-${e.color}${extCls(e)}"${extAttr(e)} data-act="edit-event" data-id="${esc(e.id)}" data-date="${k}">${esc(e.title) || '(제목 없음)'}</button>`).join('')}</div>`;
 }
 
 /* 시간표 격자 (오늘 화면 1칸 / 주간 7칸 공용) */
@@ -382,7 +396,7 @@ function timeGridHTML(dates) {
   const today = todayKey();
   const labels = Array.from({ length: H1 - H0 }, (_, i) => `<div class="tg-h"><span>${pad(H0 + i)}</span></div>`).join('');
   const cols = dates.map((k) => {
-    const blocks = layoutDay(store.eventsOn(k).filter((e) => !e.allDay)).map((it) => evBlockHTML(it, k)).join('');
+    const blocks = layoutDay(eventsOn(k).filter((e) => !e.allDay)).map((it) => evBlockHTML(it, k)).join('');
     let now = '';
     if (k === today) {
       const m = nowMin();
@@ -400,10 +414,10 @@ function evBlockHTML(it, k) {
   const short = en - s < 45;
   const l = (it.col / it.ncol) * 100;
   const w = 100 / it.ncol;
-  return `<div class="ev c-${e.color} ${short ? 'short' : ''}" data-id="${e.id}" data-date="${k}"
-    style="top:${pctOf(s)};height:${pctLen(en - s)};left:calc(${l}% + 2px);width:calc(${w}% - 4px)">
+  return `<div class="ev c-${e.color}${extCls(e)} ${short ? 'short' : ''}" data-id="${esc(e.id)}" data-date="${k}"
+    style="${extVars(e)}top:${pctOf(s)};height:${pctLen(en - s)};left:calc(${l}% + 2px);width:calc(${w}% - 4px)">
     <div class="ev-t">${e.start}${short ? '' : `–${e.end}`}${e.repeat !== 'none' ? ' ↻' : ''}</div>
-    <div class="ev-title">${esc(e.title) || '(제목 없음)'}</div><i class="ev-resize"></i></div>`;
+    <div class="ev-title">${esc(e.title) || '(제목 없음)'}</div>${e.ext ? '' : '<i class="ev-resize"></i>'}</div>`;
 }
 
 /* 메모 (그때그때 적는 곳) — feed: 오늘 메모 아래로 지난 메모까지 이어서 보여 줌 */
@@ -510,7 +524,7 @@ function monthHTML() {
     const k = addDays(gs, i);
     const dt = parseKey(k);
     const d = store.day(k);
-    const evs = store.eventsOn(k);
+    const evs = eventsOn(k);
     const pr = d.priorities.filter((p) => p.text);
     const done = pr.filter((p) => p.done).length;
     const miss = pr.filter((p) => p.missed).length;
@@ -520,8 +534,8 @@ function monthHTML() {
         ${pr.length ? `<span class="mo-pri ${done === pr.length ? 'all' : ''}" title="우선순위 ${done}/${pr.length} 완료">✓ ${done}/${pr.length}</span>` : ''}
         <button class="mo-add" data-act="new-event" data-date="${k}" aria-label="${md(k)} 일정 추가" title="일정 추가">${I.plus}</button>
       </div>
-      <div class="mo-evs">${evs.slice(0, 4).map((e) => `<div class="mo-ev c-${e.color}" draggable="true" data-act="edit-event" data-id="${e.id}" data-date="${k}">${e.allDay ? '' : `<b>${e.start}</b>`}${esc(e.title) || '(제목 없음)'}</div>`).join('')}${evs.length > 4 ? `<div class="mo-more">+${evs.length - 4}개 더</div>` : ''}</div>
-      <div class="mo-dots">${evs.slice(0, 4).map((e) => `<i class="c-${e.color}"></i>`).join('')}${d.notes.length ? '<i class="memo"></i>' : ''}</div>
+      <div class="mo-evs">${evs.slice(0, 4).map((e) => `<div class="mo-ev c-${e.color}${extCls(e)}"${extAttr(e)} draggable="${e.ext ? 'false' : 'true'}" data-act="edit-event" data-id="${esc(e.id)}" data-date="${k}">${e.allDay ? '' : `<b>${e.start}</b>`}${esc(e.title) || '(제목 없음)'}</div>`).join('')}${evs.length > 4 ? `<div class="mo-more">+${evs.length - 4}개 더</div>` : ''}</div>
+      <div class="mo-dots">${evs.slice(0, 4).map((e) => `<i class="c-${e.color}"${extAttr(e)}></i>`).join('')}${d.notes.length ? '<i class="memo"></i>' : ''}</div>
       <div class="mo-foot">
         ${d.notes.length ? `<span class="mo-memo">${I.memo}${d.notes.length}</span>` : ''}
         ${pr.length ? `<span class="mo-bar" title="우선순위 진행"><i style="width:${(done / pr.length) * 100}%"></i><i class="x" style="width:${(miss / pr.length) * 100}%"></i></span>` : ''}
@@ -543,9 +557,9 @@ function weekHTML() {
   const top = dates.map((k) => {
     const d = store.day(k);
     const pr = d.priorities.filter((p) => p.text);
-    const ad = store.eventsOn(k).filter((e) => e.allDay);
+    const ad = eventsOn(k).filter((e) => e.allDay);
     return `<div class="wk-top-cell ${k === S.cal.sel ? 'sel' : ''}" data-act="pick-day" data-date="${k}">
-      ${ad.map((e) => `<div class="chip-ev c-${e.color}" data-act="edit-event" data-id="${e.id}" data-date="${k}">${esc(e.title)}</div>`).join('')}
+      ${ad.map((e) => `<div class="chip-ev c-${e.color}${extCls(e)}"${extAttr(e)} data-act="edit-event" data-id="${esc(e.id)}" data-date="${k}">${esc(e.title)}</div>`).join('')}
       ${pr.slice(0, 4).map((p) => `<div class="wk-pri ${p.done ? 'done' : ''} ${p.missed ? 'miss' : ''}">${esc(p.text)}</div>`).join('')}
       ${pr.length > 4 ? `<div class="wk-more">+${pr.length - 4}</div>` : ''}</div>`;
   }).join('');
@@ -558,7 +572,7 @@ function weekHTML() {
 
 function sideHTML(k) {
   const d = store.day(k);
-  const evs = store.eventsOn(k);
+  const evs = eventsOn(k);
   const pr = d.priorities.map((p, i) => ({ ...p, i })).filter((p) => p.text);
   return `<div class="side-head">
       <div><div class="side-date">${md(k)} ${WD_FULL[wdIdx(k)]}</div><div class="side-sub">${relLabel(k)}</div></div>
@@ -567,8 +581,8 @@ function sideHTML(k) {
     ${d.goal ? `<div class="side-goal">${esc(d.goal)}</div>` : ''}
     <div class="side-sec">
       <h3 class="label">일정<button class="mini" data-act="new-event" data-date="${k}">${I.plus}추가</button></h3>
-      ${evs.length ? `<ul class="side-evs">${evs.map((e) => `<li class="c-${e.color}" data-act="edit-event" data-id="${e.id}" data-date="${k}">
-        <span class="t">${e.allDay ? '하루 종일' : `${e.start}–${e.end}`}</span><span class="n">${esc(e.title) || '(제목 없음)'}</span>${e.repeat !== 'none' ? '<span class="r">↻</span>' : ''}</li>`).join('')}</ul>` : '<p class="empty">일정이 없어요</p>'}
+      ${evs.length ? `<ul class="side-evs">${evs.map((e) => `<li class="c-${e.color}${extCls(e)}"${extAttr(e)} data-act="edit-event" data-id="${esc(e.id)}" data-date="${k}">
+        <span class="t">${e.allDay ? '하루 종일' : `${e.start}–${e.end}`}</span><span class="n">${esc(e.title) || '(제목 없음)'}</span>${e.ext ? `<span class="r">${esc(e.calName)}</span>` : e.repeat !== 'none' ? '<span class="r">↻</span>' : ''}</li>`).join('')}</ul>` : '<p class="empty">일정이 없어요</p>'}
     </div>
     <div class="side-sec">
       <h3 class="label">우선순위<small>${priSummary(d)}</small><span class="pri-legend"><i>했음</i><i>못함</i></span></h3>
@@ -770,6 +784,74 @@ function deleteEventFlow(id, occ) {
   }
 }
 
+/* 캘린더에서 불러온 일정 보기 (읽기 전용) */
+function openExtEvent(id, k) {
+  const e = eventsOn(k).find((x) => x.id === id);
+  if (!e) return;
+  openModal(`<div class="ed">
+    <div class="ed-head"><h3>캘린더 일정</h3><button class="icon-btn" data-act="modal-close" aria-label="닫기">${I.x}</button></div>
+    <div class="ext-title"><i style="background:${e.extColor}"></i><span>${esc(e.title)}</span></div>
+    <p class="ext-when">${md(k)} ${WD_FULL[wdIdx(k)]} · ${e.allDay ? '하루 종일' : `${e.start}–${e.end}`}</p>
+    ${e.location ? `<p class="ext-where">장소 · ${esc(e.location)}</p>` : ''}
+    <p class="muted small">${esc(e.calName)} 캘린더에서 불러온 일정이라 여기서는 보기만 할 수 있어요. 고치려면 삼성 캘린더나 구글 캘린더에서 고쳐 주세요. 플래너에는 자동으로 반영돼요.</p>
+    <div class="ed-foot"><span class="grow"></span><button class="btn" data-act="modal-close">닫기</button></div>
+  </div>`, { cls: 'sheet' });
+}
+
+/* 구글(삼성) 캘린더 연결 */
+function gcalSectionHTML() {
+  const g = store.settings.gcal;
+  if (g && g.url && g.key) {
+    const status = gcal.loading ? '불러오는 중…' : gcal.error ? gcalErrorText(gcal.error) : gcal.fetchedAt ? `${hhmm(gcal.fetchedAt)}에 받아 옴 · 일정 ${gcal.count}개 · 20분마다 자동으로 새로 받아요` : '아직 받지 않았어요';
+    const hidden = new Set(g.hidden || []);
+    return `<p class="ok-line">${I.check}구글 캘린더 연결됨</p>
+      <p class="${gcal.error ? 'err' : 'muted small'}">${esc(status)}</p>
+      ${gcal.calendars.length ? `<p class="muted small">보여 줄 캘린더</p><div class="cal-list">${gcal.calendars.map((c) => `<label class="ck"><input type="checkbox" data-gcal-cal="${esc(c.id)}" ${hidden.has(c.id) ? '' : 'checked'}><i style="background:${safeColor(c.color)}"></i>${esc(c.name)}</label>`).join('')}</div>` : ''}
+      <div class="row"><button class="btn" data-act="gcal-refresh">지금 새로 받기</button><button class="btn danger-text" data-act="gcal-off">연결 끊기</button></div>`;
+  }
+  return `<p>구글 캘린더(삼성 캘린더에서 구글 계정에 저장한 일정 포함)를 시간표·캘린더에 보여 줘요. <b>한 번만</b> 해 두면 계속 유지되고, 다른 기기에도 자동으로 적용돼요.</p>
+    <ol class="steps">
+      <li><button class="btn sm" data-act="gcal-copy">${I.down}연결 코드 복사</button></li>
+      <li><a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">구글 Apps Script 새 프로젝트</a>를 열고, 원래 있던 코드를 모두 지운 뒤 붙여 넣고 저장</li>
+      <li><b>배포 → 새 배포 → 웹 앱</b> · 실행: <b>나</b> · 액세스: <b>모든 사용자</b> → 배포 → <b>액세스 승인</b>(고급 → 이동 → 허용)</li>
+      <li>나온 <b>웹 앱 URL</b>을 복사해서 아래에 붙여 넣고 연결</li>
+    </ol>
+    <textarea class="code-box" id="gcalCodeBox" readonly hidden></textarea>
+    <div class="row"><input class="url-input" id="gcalUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"><button class="btn primary" data-act="gcal-connect">연결</button></div>
+    <p class="muted small">자세한 순서: <a href="${SETUP_URL}#calendar" target="_blank" rel="noopener">SETUP.md 6번 캘린더 연결</a></p>`;
+}
+
+async function copyGcalCode() {
+  let key = localStorage.getItem('gcalPendingKey');
+  if (!key) { key = newKey(); localStorage.setItem('gcalPendingKey', key); }
+  const code = scriptCode(key);
+  try {
+    await navigator.clipboard.writeText(code);
+    toast('연결 코드를 복사했어요. Apps Script에 붙여 넣으세요');
+  } catch {
+    const box = document.getElementById('gcalCodeBox');
+    if (box) { box.hidden = false; box.value = code; box.focus(); box.select(); }
+    toast('아래 코드를 모두 선택해서 복사해 주세요');
+  }
+}
+
+async function connectGcal() {
+  const url = (document.getElementById('gcalUrl')?.value || '').trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) {
+    toast('웹 앱 URL을 그대로 붙여 넣어 주세요 (…/exec 로 끝나요)');
+    return;
+  }
+  const key = localStorage.getItem('gcalPendingKey');
+  if (!key) { toast('먼저 "연결 코드 복사"를 눌러 코드를 Apps Script에 붙여 넣어 주세요'); return; }
+  toast('연결을 확인하는 중…');
+  const r = await gcal.test(url, key);
+  if (!r.ok) { toast(gcalErrorText(r.error)); return; }
+  store.saveSettings({ gcal: { url, key, hidden: [] } });
+  localStorage.removeItem('gcalPendingKey');
+  toast(`캘린더를 연결했어요 · 일정 ${r.count}개`);
+  setTimeout(() => { if (modal?.el.querySelector('.st')) openSettings(); }, 1200);
+}
+
 /* 설정 */
 function openSettings() {
   const s = store.status;
@@ -796,6 +878,7 @@ function openSettings() {
   openModal(`<div class="st">
     <div class="ed-head"><h3>설정</h3><button class="icon-btn" data-act="modal-close" aria-label="닫기">${I.x}</button></div>
     <section><h4>기기 연동</h4>${sync}</section>
+    <section id="calendar-link"><h4>구글·삼성 캘린더</h4>${gcalSectionHTML()}</section>
     <section><h4>앱 설치</h4>${install}</section>
     <section><h4>백업</h4>
       <p class="muted">모든 기록(사진 포함)을 파일 하나로 내려받아 따로 보관할 수 있어요.</p>
@@ -1178,7 +1261,16 @@ function onClick(e) {
     case 'note-update': updateNote(k, a.dataset.id); break;
     case 'note-del': if (confirm('이 메모를 지울까요?')) deleteNote(k, a.dataset.id); break;
     case 'new-event': openEventEditor({ date: k }); break;
-    case 'edit-event': openEventEditor({ id: a.dataset.id, date: a.dataset.date }); break;
+    case 'edit-event':
+      if (a.dataset.id.startsWith('g:')) openExtEvent(a.dataset.id, a.dataset.date);
+      else openEventEditor({ id: a.dataset.id, date: a.dataset.date });
+      break;
+    case 'gcal-copy': copyGcalCode(); break;
+    case 'gcal-connect': connectGcal(); break;
+    case 'gcal-refresh': gcal.refresh().then((ok) => { toast(ok ? `캘린더를 새로 받았어요 · 일정 ${gcal.count}개` : gcalErrorText(gcal.error)); if (modal?.el.querySelector('.st')) openSettings(); }); break;
+    case 'gcal-off':
+      if (confirm('캘린더 연결을 끊을까요? (플래너에 적은 내용은 그대로예요)')) { store.saveSettings({ gcal: null }); closeModal(); toast('캘린더 연결을 끊었어요'); }
+      break;
     case 'ev-del': deleteEventFlow(a.dataset.id, a.dataset.date); break;
     case 'ev-del-one': store.skipOccurrence(a.dataset.id, a.dataset.date); closeModal(); render(); toast('그날 일정만 지웠어요'); break;
     case 'ev-del-all': store.deleteEvent(a.dataset.id); closeModal(); render(); toast('반복 일정을 모두 지웠어요'); break;
@@ -1394,12 +1486,33 @@ function afterTap(pointerType, fn) {
   timer = setTimeout(run, 450);
 }
 
+// 캘린더에서 불러온 일정: 끌어서 옮기지 않고, 톡 누르면 내용만 보여 줌
+function extTap(e, el) {
+  const x0 = e.clientX;
+  const y0 = e.clientY;
+  let moved = false;
+  const move = (m) => { if (Math.hypot(m.clientX - x0, m.clientY - y0) > 8) moved = true; };
+  const cleanup = () => {
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', up);
+    removeEventListener('pointercancel', cleanup);
+  };
+  const up = () => {
+    cleanup();
+    if (!moved) afterTap(e.pointerType, () => openExtEvent(el.dataset.id, el.dataset.date));
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', up);
+  addEventListener('pointercancel', cleanup);
+}
+
 function onGridPointerDown(e) {
   if (e.button > 0) return;
   const col = e.target.closest('.tg-col');
   if (!col || e.target.closest('.slot-input')) return;
   const evEl = e.target.closest('.ev');
-  if (evEl) eventGesture(e, evEl, col);
+  if (evEl && evEl.dataset.id.startsWith('g:')) extTap(e, evEl);
+  else if (evEl) eventGesture(e, evEl, col);
   else slotGesture(e, col);
 }
 
@@ -1754,7 +1867,19 @@ async function boot() {
   await local.open();
   await store.start(local);
   if (demo && !store.days.size && !store.events.size) await seedDemo();
-  if (demo) window.__planner = { store, S, render };
+  if (demo) window.__planner = { store, S, render, gcal };
+  // 캘린더 연결 정보는 클라우드 설정에 있어서 모든 기기에 같이 적용됨
+  gcal.onChange = () => requestRender();
+  gcal.configure(store.settings.gcal || {});
+  store.on((type) => { if (type === 'settings') gcal.configure(store.settings.gcal || {}); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && gcal.on && Date.now() - gcal.fetchedAt > 10 * 60 * 1000) gcal.refresh();
+  });
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches?.('[data-gcal-cal]')) return;
+    const hidden = [...document.querySelectorAll('[data-gcal-cal]')].filter((x) => !x.checked).map((x) => x.dataset.gcalCal);
+    store.saveSettings({ gcal: { ...(store.settings.gcal || {}), hidden } });
+  });
   store.on((type) => {
     if (type === 'data') requestRender();
     else if (type === 'status') {

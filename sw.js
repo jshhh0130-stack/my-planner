@@ -9,6 +9,7 @@ const SHELL = [
   './js/store.js',
   './js/util.js',
   './js/cloud.js',
+  './js/gcal.js',
   './js/firebase-config.js',
   './manifest.webmanifest',
   './icons/icon-192.png',

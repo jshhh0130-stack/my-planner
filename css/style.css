@@ -146,6 +146,23 @@ body[data-view='calendar'] main { max-width: 1800px; }
 .c-yellow { --c: #c79417; --c-bg: #fdf2d6; --c-ink: #684d05; }
 .c-purple { --c: #7b5bc0; --c-bg: #eee8f9; --c-ink: #442f78; }
 .c-gray { --c: #7a808a; --c-bg: #eef0f2; --c-ink: #3a3f46; }
+.c-ext { --c: #4a6fb5; --c-bg: #4a6fb51a; --c-ink: #2a2f36; }
+/* 캘린더에서 불러온 일정: 테두리 있는 칸 (플래너 일정은 색이 채워진 칸) */
+.ev.ext, .mo-ev.ext, .chip-ev.ext { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 0 0 1px #fff; cursor: pointer; }
+.ev.ext .ev-t { color: var(--c-ink); opacity: .75; }
+.side-evs li.ext .r { font-size: 11.5px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ext-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; font-size: 20px; font-weight: 800; }
+.ext-title i { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.ext-when { margin: 0 0 6px; font-weight: 600; color: var(--ink2); }
+.ext-where { margin: 0 0 8px; color: var(--ink2); }
+.steps { margin: 4px 0 12px; padding-left: 20px; line-height: 1.65; font-size: 14px; }
+.steps li { margin-bottom: 6px; }
+.url-input { flex: 1; min-width: 200px; height: 38px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; outline: 0; font-size: 14px; }
+.url-input:focus { border-color: var(--accent); }
+.code-box { width: 100%; height: 140px; font: 12px/1.45 Consolas, monospace; border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 10px; }
+.cal-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.cal-list .ck { margin-left: 0; }
+.cal-list .ck i { width: 10px; height: 10px; border-radius: 50%; }
 
 /* ---------- 오늘 화면 머리 ---------- */
 .day-head {
