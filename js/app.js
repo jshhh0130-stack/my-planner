@@ -818,12 +818,18 @@ function gcalSectionHTML() {
     </ol>
     <textarea class="code-box" id="gcalCodeBox" readonly hidden></textarea>
     <div class="row"><input class="url-input" id="gcalUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"><button class="btn primary" data-act="gcal-connect">연결</button></div>
+    <p class="err" id="gcalErr" hidden></p>
     <p class="muted small">자세한 순서: <a href="${SETUP_URL}#calendar" target="_blank" rel="noopener">SETUP.md 6번 캘린더 연결</a></p>`;
 }
 
+// 코드를 복사한 기기와 연결 버튼을 누르는 기기가 달라도 되게, 키는 클라우드 설정에도 보관
+const pendingKey = () => store.settings.gcalPending || localStorage.getItem('gcalPendingKey') || '';
+
 async function copyGcalCode() {
-  let key = localStorage.getItem('gcalPendingKey');
-  if (!key) { key = newKey(); localStorage.setItem('gcalPendingKey', key); }
+  let key = pendingKey();
+  if (!key) key = newKey();
+  localStorage.setItem('gcalPendingKey', key);
+  if (store.settings.gcalPending !== key) store.saveSettings({ gcalPending: key });
   const code = scriptCode(key);
   try {
     await navigator.clipboard.writeText(code);
@@ -836,17 +842,26 @@ async function copyGcalCode() {
 }
 
 async function connectGcal() {
-  const url = (document.getElementById('gcalUrl')?.value || '').trim();
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) {
-    toast('웹 앱 URL을 그대로 붙여 넣어 주세요 (…/exec 로 끝나요)');
+  const errBox = document.getElementById('gcalErr');
+  const fail = (msg) => {
+    toast(msg.length > 60 ? '연결하지 못했어요 · 아래 안내를 봐 주세요' : msg);
+    if (errBox) { errBox.textContent = msg; errBox.hidden = false; }
+  };
+  if (errBox) errBox.hidden = true;
+  let url = (document.getElementById('gcalUrl')?.value || '').trim().replace(/\s+/g, '');
+  // '배포 ID'를 붙여 넣었으면 웹 앱 주소로 바꿔 줌
+  if (/^AKfy[\w-]{20,}$/.test(url)) url = `https://script.google.com/macros/s/${url}/exec`;
+  url = url.replace(/\/dev$/, '/exec').replace(/(\/exec)[?#].*$/, '$1');
+  if (!/^https:\/\/script\.google\.com\/(a\/[^/]+\/)?macros\/s\/[\w-]+\/exec$/.test(url)) {
+    fail('"웹 앱 URL"(https://script.google.com/macros/s/…/exec)을 그대로 붙여 넣어 주세요. 배포 화면의 "웹 앱 URL" 아래 복사 버튼을 누르면 돼요.');
     return;
   }
-  const key = localStorage.getItem('gcalPendingKey');
-  if (!key) { toast('먼저 "연결 코드 복사"를 눌러 코드를 Apps Script에 붙여 넣어 주세요'); return; }
+  const key = pendingKey();
+  if (!key) { fail('먼저 위의 "연결 코드 복사"를 눌러, 그 코드를 Apps Script에 붙여 넣고 다시 배포해 주세요.'); return; }
   toast('연결을 확인하는 중…');
   const r = await gcal.test(url, key);
-  if (!r.ok) { toast(gcalErrorText(r.error)); return; }
-  store.saveSettings({ gcal: { url, key, hidden: [] } });
+  if (!r.ok) { fail(gcalErrorText(r.error)); return; }
+  store.saveSettings({ gcal: { url, key, hidden: [] }, gcalPending: null });
   localStorage.removeItem('gcalPendingKey');
   toast(`캘린더를 연결했어요 · 일정 ${r.count}개`);
   setTimeout(() => { if (modal?.el.querySelector('.st')) openSettings(); }, 1200);

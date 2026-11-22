@@ -101,7 +101,13 @@ const isoOf = (k) => parseKey(k).toISOString();
 
 async function fetchRange(url, key, range) {
   const u = `${url}${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}&from=${encodeURIComponent(isoOf(range.from))}&to=${encodeURIComponent(isoOf(addDays(range.to, 1)))}`;
-  const res = await fetch(u, { cache: 'no-store' });
+  let res;
+  try {
+    res = await fetch(u, { cache: 'no-store' });
+  } catch {
+    // 웹 앱이 '나만'/'Google 계정이 있는 사용자'로 배포됐거나, 승인 전이면 브라우저가 응답을 막음
+    throw new Error(navigator.onLine ? 'blocked' : 'offline');
+  }
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch { throw new Error('not-json'); }
@@ -241,7 +247,9 @@ export const gcal = new GCal();
 export function gcalErrorText(err) {
   const s = String(err || '');
   if (s === 'bad-key') return '연결 코드의 키가 맞지 않아요. 설정에서 "연결 코드 복사"를 다시 해서 붙여 넣어 주세요.';
-  if (s === 'not-json') return '연결 주소가 웹 앱 주소가 아니거나, 배포의 "액세스 권한"이 "모든 사용자"가 아니에요.';
-  if (/Failed to fetch|NetworkError|Load failed/i.test(s)) return '캘린더를 불러오지 못했어요. 인터넷 연결이나 연결 주소를 확인해 주세요.';
+  if (s === 'blocked' || s === 'not-json' || /Failed to fetch|NetworkError|Load failed/i.test(s)) {
+    return 'Apps Script 웹 앱에 들어가지 못했어요. Apps Script에서 배포 → 배포 관리 → 연필(수정) → "액세스 권한이 있는 사용자"를 "모든 사용자"로, 버전은 "새 버전"으로 바꿔 배포해 주세요. (주소는 그대로예요) 코드를 저장한 뒤 배포했는지, 액세스 승인을 했는지도 확인해 주세요.';
+  }
+  if (s === 'offline') return '인터넷에 연결되어 있지 않아요.';
   return s ? `캘린더를 불러오지 못했어요 (${s})` : '';
 }
