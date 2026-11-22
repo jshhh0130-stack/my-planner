@@ -2,8 +2,8 @@
 // 내 구글 계정의 Apps Script 웹 앱이 캘린더를 읽어 JSON으로 돌려줌 → 토큰 갱신 필요 없음
 import { addDays, todayKey, keyOf, parseKey, fromMin } from './util.js';
 
-const REFRESH_MS = 20 * 60 * 1000; // 20분마다(화면을 보고 있을 때만)
-const STALE_MS = 10 * 60 * 1000;   // 앱을 열 때 10분 넘게 지났으면 새로 받기
+const REFRESH_MS = 10 * 60 * 1000; // 켜 둔 동안 10분마다(화면을 보고 있을 때만)
+export const STALE_MS = 3 * 60 * 1000; // 앱을 열거나 캘린더 탭을 열 때 3분 넘게 지났으면 새로 받기
 
 export const safeColor = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : '#4a6fb5');
 

@@ -1,7 +1,7 @@
 // Daily Planner — 화면과 동작
 import { store, LocalBackend, COLORS, isEmptyDay } from './store.js';
 import { firebaseConfig } from './firebase-config.js';
-import { gcal, scriptCode, newKey, gcalErrorText, safeColor } from './gcal.js';
+import { gcal, scriptCode, newKey, gcalErrorText, safeColor, STALE_MS } from './gcal.js';
 import {
   pad, keyOf, parseKey, todayKey, addDays, addMonths, dayDiff, wdIdx, WD, WD_FULL, startOfWeek,
   toMin, fromMin, clamp, uid, esc, escRe, hhmm, richText, md, relLabel,
@@ -802,7 +802,7 @@ function openExtEvent(id, k) {
 function gcalSectionHTML() {
   const g = store.settings.gcal;
   if (g && g.url && g.key) {
-    const status = gcal.loading ? '불러오는 중…' : gcal.error ? gcalErrorText(gcal.error) : gcal.fetchedAt ? `${hhmm(gcal.fetchedAt)}에 받아 옴 · 일정 ${gcal.count}개 · 20분마다 자동으로 새로 받아요` : '아직 받지 않았어요';
+    const status = gcal.loading ? '불러오는 중…' : gcal.error ? gcalErrorText(gcal.error) : gcal.fetchedAt ? `${hhmm(gcal.fetchedAt)}에 받아 옴 · 일정 ${gcal.count}개 · 앱을 열 때와 켜 둔 동안 10분마다 자동으로 새로 받아요` : '아직 받지 않았어요';
     const hidden = new Set(g.hidden || []);
     return `<p class="ok-line">${I.check}구글 캘린더 연결됨</p>
       <p class="${gcal.error ? 'err' : 'muted small'}">${esc(status)}</p>
@@ -1005,7 +1005,10 @@ function go(view) {
     history.replaceState(null, '', location.pathname + location.search);
   } else history.replaceState({ tab: 1 }, '', `#${view}`);
   S.view = view;
-  if (view === 'calendar') S.cal.scrolled = false;
+  if (view === 'calendar') {
+    S.cal.scrolled = false;
+    if (gcal.on && Date.now() - gcal.fetchedAt > STALE_MS) gcal.refresh(); // 캘린더 탭을 열면 최신 일정으로
+  }
   render({ resetScroll: true });
 }
 
@@ -1888,7 +1891,7 @@ async function boot() {
   gcal.configure(store.settings.gcal || {});
   store.on((type) => { if (type === 'settings') gcal.configure(store.settings.gcal || {}); });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && gcal.on && Date.now() - gcal.fetchedAt > 10 * 60 * 1000) gcal.refresh();
+    if (!document.hidden && gcal.on && Date.now() - gcal.fetchedAt > STALE_MS) gcal.refresh();
   });
   document.addEventListener('change', (e) => {
     if (!e.target.matches?.('[data-gcal-cal]')) return;
