@@ -69,8 +69,11 @@ function expand(raw, calMap) {
     if (r.allDay) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(r.startDate || '')) continue;
       const endEx = r.endDate && r.endDate > r.startDate ? r.endDate : addDays(r.startDate, 1);
+      const last = addDays(endEx, -1);
+      // 여러 날이면 월 달력에서 이어진 막대로 그리도록 묶음 정보
+      const span = last > r.startDate ? { grp: `g:${r.id}:${r.startDate}`, spanFrom: r.startDate, spanTo: last } : {};
       for (let k = r.startDate, n = 0; k < endEx && n < 400; k = addDays(k, 1), n++) {
-        push(k, { ...base, id: `g:${r.id}:${r.startDate}:${k}`, date: k, allDay: true, start: '00:00', end: '24:00' });
+        push(k, { ...base, ...span, id: `g:${r.id}:${r.startDate}:${k}`, date: k, allDay: true, start: '00:00', end: '24:00' });
       }
       continue;
     }
@@ -87,12 +90,12 @@ function expand(raw, calMap) {
       continue;
     }
     // 여러 날에 걸친 일정: 첫날 ~24:00, 가운데 날은 하루 종일, 마지막 날 00:00~
-    push(sk, { ...base, id: `g:${r.id}:${r.start}:a`, date: sk, allDay: false, start: fromMin(sm), end: '24:00' });
+    const span = { grp: `g:${r.id}:${r.start}`, spanFrom: sk, spanTo: ek };
+    push(sk, { ...base, ...span, _multi: 'first', id: `g:${r.id}:${r.start}:a`, date: sk, allDay: false, start: fromMin(sm), end: '24:00' });
     for (let k = addDays(sk, 1), n = 0; k < ek && n < 60; k = addDays(k, 1), n++) {
-      push(k, { ...base, id: `g:${r.id}:${r.start}:${k}`, date: k, allDay: true, start: '00:00', end: '24:00' });
+      push(k, { ...base, ...span, _multi: 'mid', id: `g:${r.id}:${r.start}:${k}`, date: k, allDay: true, start: '00:00', end: '24:00' });
     }
-    if (em > 0) push(ek, { ...base, id: `g:${r.id}:${r.start}:z`, date: ek, allDay: false, start: '00:00', end: fromMin(em) });
-    else push(ek, { ...base, id: `g:${r.id}:${r.start}:z`, date: ek, allDay: false, start: '00:00', end: '24:00' });
+    push(ek, { ...base, ...span, _multi: 'last', id: `g:${r.id}:${r.start}:z`, date: ek, allDay: false, start: '00:00', end: em > 0 ? fromMin(em) : '24:00' });
   }
   return byDate;
 }

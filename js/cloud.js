@@ -96,6 +96,14 @@ class Cloud {
   putEvent(e) { return this.F.setDoc(this.ref('events', e.id), e); }
   deleteEvent(id) { return this.F.deleteDoc(this.ref('events', id)); }
   putSettings(v) { return this.F.setDoc(this.ref('meta', 'settings'), v); }
+  putInk(doc) { return this.F.setDoc(this.ref('ink', doc.date), doc); }
+  watchInk(k, cb) {
+    return this.F.onSnapshot(
+      this.ref('ink', k),
+      (s) => cb(s.exists() ? s.data() : null),
+      (err) => { console.error(err); this.onError?.(err); },
+    );
+  }
   putPhoto(p) { return this.F.setDoc(this.ref('photos', p.id), p); }
   async getPhoto(id) {
     const s = await this.F.getDoc(this.ref('photos', id));

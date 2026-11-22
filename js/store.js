@@ -1,7 +1,7 @@
 // 데이터 저장소
 // - 로그인 전: 이 기기 안(IndexedDB)에만 저장 → 인터넷 없어도 동작
 // - 구글 로그인 후: Firebase(클라우드)에 저장 → 핸드폰·노트북·패드 실시간 연동
-import { uid, wdIdx } from './util.js';
+import { uid, wdIdx, parseKey } from './util.js';
 
 export const PRI_N = 10;
 export const COLORS = ['blue', 'green', 'pink', 'yellow', 'purple', 'gray'];
@@ -52,14 +52,21 @@ export function isEmptyDay(d) {
 }
 
 export function normEvent(e) {
+  const repeat = ['none', 'daily', 'weekdays', 'weekly', 'monthly'].includes(e.repeat) ? e.repeat : 'none';
+  const days = Array.isArray(e.days)
+    ? [...new Set(e.days.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort((a, b) => a - b)
+    : [];
   return {
     id: e.id,
     title: e.title || '',
     date: e.date,
+    // 여러 날 일정(반복 없음)의 마지막 날 — 하루짜리는 date와 같음
+    endDate: repeat === 'none' && e.endDate && e.endDate > e.date ? e.endDate : e.date,
     start: e.start || '09:00',
     end: e.end || '10:00',
     allDay: !!e.allDay,
-    repeat: ['none', 'daily', 'weekdays', 'weekly'].includes(e.repeat) ? e.repeat : 'none',
+    repeat,
+    days, // 매주 반복 요일 (월=0 … 일=6)
     until: e.until || '',
     exdates: Array.isArray(e.exdates) ? e.exdates : [],
     color: COLORS.includes(e.color) ? e.color : 'blue',
@@ -68,16 +75,27 @@ export function normEvent(e) {
   };
 }
 
-// 이 일정이 날짜 k에 있는지 (반복 포함)
+export const weekDaysOf = (ev) => (ev.repeat === 'weekdays' ? [0, 1, 2, 3, 4] : ev.days && ev.days.length ? ev.days : [wdIdx(ev.date)]);
+
+// 이 일정이 날짜 k에 있는지 (여러 날 · 반복 포함)
 export function occursOn(ev, k) {
   if (ev.exdates.includes(k)) return false;
-  if (ev.repeat === 'none') return ev.date === k;
+  if (ev.repeat === 'none') return k >= ev.date && k <= (ev.endDate || ev.date);
   if (k < ev.date) return false;
   if (ev.until && k > ev.until) return false;
   if (ev.repeat === 'daily') return true;
-  if (ev.repeat === 'weekdays') return wdIdx(k) < 5;
-  if (ev.repeat === 'weekly') return wdIdx(k) === wdIdx(ev.date);
+  if (ev.repeat === 'weekdays' || ev.repeat === 'weekly') return weekDaysOf(ev).includes(wdIdx(k));
+  if (ev.repeat === 'monthly') return parseKey(k).getDate() === parseKey(ev.date).getDate();
   return false;
+}
+
+// 여러 날 일정은 날마다 보여 줄 부분으로: 첫날 시작~24시, 가운데 날 하루 종일, 마지막 날 0시~끝
+function partOf(ev, k) {
+  if (ev.repeat !== 'none' || !ev.endDate || ev.endDate === ev.date) return ev;
+  if (ev.allDay) return { ...ev, _multi: 'all' };
+  if (k === ev.date) return { ...ev, end: '24:00', _multi: 'first' };
+  if (k === ev.endDate) return ev.end === '00:00' ? null : { ...ev, start: '00:00', _multi: 'last' };
+  return { ...ev, allDay: true, _multi: 'mid' };
 }
 
 // 두 기기에 같은 날 기록이 있을 때 합치기 (아무것도 버리지 않음)
@@ -107,10 +125,10 @@ export class LocalBackend {
 
   async open() {
     this.db = await new Promise((res, rej) => {
-      const r = indexedDB.open(this.dbName, 1);
+      const r = indexedDB.open(this.dbName, 2);
       r.onupgradeneeded = () => {
         const db = r.result;
-        for (const [s, k] of [['days', 'date'], ['events', 'id'], ['photos', 'id'], ['meta', 'key']]) {
+        for (const [s, k] of [['days', 'date'], ['events', 'id'], ['photos', 'id'], ['meta', 'key'], ['ink', 'date']]) {
           if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: k });
         }
       };
@@ -159,6 +177,15 @@ export class LocalBackend {
   async putEvent(e) { await this.put('events', e); this.bc?.postMessage({ t: 'event', k: e.id }); }
   async deleteEvent(id) { await this.del('events', id); this.bc?.postMessage({ t: 'event', k: id }); }
   async putSettings(v) { await this.put('meta', { key: 'settings', value: v }); this.bc?.postMessage({ t: 'settings' }); }
+  // 시간표 펜 필기 (날짜별)
+  async putInk(doc) { await this.put('ink', doc); this.bc?.postMessage({ t: 'ink', k: doc.date }); }
+  watchInk(k, cb) {
+    let alive = true;
+    this.get('ink', k).then((d) => { if (alive) cb(d || null); });
+    const fn = async ({ data: m }) => { if (alive && m.t === 'ink' && m.k === k) cb((await this.get('ink', k)) || null); };
+    this.bc?.addEventListener('message', fn);
+    return () => { alive = false; this.bc?.removeEventListener('message', fn); };
+  }
   putPhoto(p) { return this.put('photos', p); }
   async getPhoto(id) { return (await this.get('photos', id))?.data || null; }
   deletePhoto(id) { return this.del('photos', id); }
@@ -266,6 +293,10 @@ export class Store {
     );
   }
 
+  /* 시간표 펜 필기 */
+  watchInk(k, cb) { return this.backend?.watchInk ? this.backend.watchInk(k, cb) : () => {}; }
+  saveInk(k, strokes) { this.track(this.backend.putInk({ date: k, strokes, updatedAt: Date.now() })); }
+
   /* 설정 (캘린더 연결 등) — 로그인하면 모든 기기에 같이 적용 */
   saveSettings(patch) {
     this.settings = { ...this.settings, ...patch };
@@ -282,7 +313,11 @@ export class Store {
   /* 일정 */
   eventsOn(k) {
     const out = [];
-    for (const e of this.events.values()) if (occursOn(e, k)) out.push(e);
+    for (const e of this.events.values()) {
+      if (!occursOn(e, k)) continue;
+      const p = partOf(e, k);
+      if (p) out.push(p);
+    }
     return out.sort((a, b) => (b.allDay - a.allDay) || a.start.localeCompare(b.start) || a.title.localeCompare(b.title));
   }
   saveEvent(e) {

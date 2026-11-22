@@ -591,6 +591,104 @@ mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 1px; 
 
 .bottom-nav, .fab { display: none; }
 
+/* ---------- 일정 편집 창 (기간 · 반복) ---------- */
+.ed2 .ed-line { display: flex; align-items: center; justify-content: space-between; padding: 10px 2px; border-bottom: 1px solid var(--line2); font-weight: 700; cursor: pointer; }
+.switch { position: relative; width: 46px; height: 27px; flex: none; }
+.switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.switch i { position: absolute; inset: 0; border-radius: 99px; background: #d3d8de; transition: background .15s; pointer-events: none; }
+.switch i::after { content: ''; position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .2); transition: transform .15s; }
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(19px); }
+.ed-range { display: grid; grid-template-columns: 1fr 26px 1fr; align-items: stretch; gap: 6px; margin: 12px 0 10px; }
+.ed-when { border: 1.5px solid var(--line); border-radius: 14px; padding: 8px 8px 6px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }
+.ed-when.on { border-color: var(--accent); background: var(--accent-weak); }
+.ed-when .cap { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.ed-when .d { font-size: 16px; font-weight: 800; margin: 2px 0; letter-spacing: -.02em; }
+.ed-when input[type='time'] { width: 100%; border: 0; background: transparent; font-size: 15px; font-weight: 600; text-align: center; color: var(--ink2); padding: 2px 0; }
+.ed-arrow { display: grid; place-items: center; color: var(--muted); }
+.ed-arrow svg { width: 18px; height: 18px; }
+.mini-cal { border: 1px solid var(--line); border-radius: 14px; padding: 6px 8px 8px; margin-bottom: 8px; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; padding: 0 0 4px; font-size: 15px; }
+.mc-wd, .mc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+.mc-wd span { font-size: 11.5px; font-weight: 800; color: var(--ink2); padding: 3px 0; }
+.mc-wd .sat, .mc-d.sat { color: var(--sat); }
+.mc-wd .sun, .mc-d.sun { color: var(--sun); }
+.mc-d { position: relative; height: 38px; margin: 1px 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+.mc-d.out { color: #c3c7cd !important; }
+.mc-d.today { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.mc-d.in { background: var(--accent-weak); }
+.mc-d.rs, .mc-d.re { background: var(--accent); color: #fff !important; border-radius: 12px; font-weight: 800; }
+.mc-d.occ::after { content: ''; position: absolute; left: 50%; bottom: 4px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent); }
+.mc-d.rs.occ::after, .mc-d.re.occ::after { background: #fff; }
+.ed-sec { padding: 8px 0 10px; border-bottom: 1px solid var(--line2); }
+.ed-sec > .cap { font-size: 13px; font-weight: 700; color: var(--ink2); margin-bottom: 6px; }
+.rep-chips, .day-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.rep-chips button { padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line); font-size: 13.5px; font-weight: 700; color: var(--ink2); }
+.rep-chips button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.day-chips button { width: 40px; height: 36px; border-radius: 10px; border: 1px solid var(--line); font-size: 14px; font-weight: 800; color: var(--ink2); }
+.day-chips button.sat { color: var(--sat); }
+.day-chips button.sun { color: var(--sun); }
+.day-chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rep-forever { margin: 0 0 8px; }
+.rep-sum { margin: 0; padding: 9px 11px; border-radius: 10px; background: var(--accent-weak); color: var(--accent-ink); font-size: 13.5px; font-weight: 700; line-height: 1.5; }
+
+/* ---------- 월 보기 (칸마다 일정 제목, 여러 날은 이어진 막대) ---------- */
+.mo-weeks { flex: 1; display: flex; flex-direction: column; }
+.mo-week { position: relative; flex: 1; min-height: 150px; border-bottom: 1px solid var(--line); }
+.mo-bg { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.mo-bg .mo-cell { padding: 0; border: 0; border-right: 1px solid var(--line); min-height: 0; }
+.mo-bg .mo-cell:first-child { border-left: 1px solid var(--line); }
+.mo-bg .mo-cell.today { background: #f5f8ff; }
+.mo-fg {
+  position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 34px repeat(var(--lanes), 22px); row-gap: 3px; padding-bottom: 6px; pointer-events: none;
+}
+.mo-dh { grid-row: 1; display: flex; align-items: center; gap: 5px; padding: 3px 6px 0 6px; min-width: 0; }
+.mo-dh .mo-num { margin-right: 0; }
+.mo-num.is-today { background: var(--accent); color: #fff !important; }
+.mo-num.out { color: #c3c7cd !important; }
+.mo-dh .mo-pri { margin-left: auto; }
+.mo-dh .mo-add { pointer-events: auto; margin-left: auto; }
+.mo-week:hover .mo-dh .mo-add { opacity: .45; }
+.mo-week .mo-dh .mo-add:hover { opacity: 1; background: #fff; box-shadow: 0 0 0 1px #d5ddef; }
+.mo-dh .mo-pri + .mo-memo-dot + .mo-add, .mo-dh .mo-pri + .mo-add { margin-left: 0; }
+.mo-memo-dot { width: 6px; height: 6px; border-radius: 50%; background: #b8bec6; flex: none; }
+.mo-dh .mo-pri ~ .mo-memo-dot { margin-left: 0; }
+.mi, .mb {
+  pointer-events: auto; min-width: 0; margin: 0 3px; padding: 0 6px; border-radius: 5px;
+  font-size: 12.5px; line-height: 22px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--c-bg); color: var(--c-ink); cursor: pointer;
+}
+.mi { border-left: 3px solid var(--c); }
+.mi.ad { background: var(--c); color: #fff; border-left: 0; font-weight: 700; }
+.mi b { font-weight: 800; margin-right: 4px; }
+.mb { background: var(--c); color: #fff; font-weight: 700; }
+.mb.cl { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.mb.cr { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.mi.ext:not(.ad) { background: color-mix(in srgb, var(--c) 12%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+.mi:hover, .mb:hover { filter: brightness(.95); }
+.mo-fg .mo-more { pointer-events: auto; margin: 0 3px; padding-left: 6px; text-align: left; font-size: 12px; font-weight: 800; color: var(--muted); line-height: 22px; }
+
+/* 빠른 일정 추가 줄 (핸드폰) · 날짜 창 */
+.qadd { display: none; }
+.day-sheet .side-head { margin-top: 2px; }
+
+/* ---------- 시간표 펜 필기 ---------- */
+.label .mini + .mini { margin-left: 2px; }
+.pen-btn.on { background: var(--accent); color: #fff; }
+canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+.pen-on canvas.ink { pointer-events: auto; touch-action: none; z-index: 8; cursor: crosshair; }
+.pen-on .tg-col { cursor: crosshair; }
+.pen-bar {
+  position: sticky; top: 70px; z-index: 12; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 8px 0; padding: 8px 10px; border-radius: 14px; background: #fff;
+  box-shadow: 0 6px 18px rgba(30, 45, 80, .14), 0 0 0 1px var(--line);
+}
+.pen-c { width: 26px; height: 26px; border-radius: 50%; background: var(--pc); box-shadow: 0 0 0 2px #fff, 0 0 0 2px transparent; }
+.pen-c.on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--pc); }
+.pen-bar .tool.on { background: var(--ink); color: #fff; }
+.pen-bar .ck { margin-left: 4px; font-size: 13px; }
+
 /* ---------- 중간 화면 (패드·작은 노트북) ---------- */
 @media (max-width: 1180px) and (min-width: 761px) {
   /* 창을 줄였을 때: 왼쪽 목표·우선순위, 오른쪽 메모(그 아래 시간표) */
@@ -734,4 +832,37 @@ mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 1px; 
   .ed-row > label:first-child { width: 48px; }
   .ck { margin-left: 0; }
   #toast { bottom: calc(150px + var(--safe-b)); }
+}
+
+/* ---------- 핸드폰: 삼성 캘린더처럼 촘촘한 월 보기 · 빠른 추가 줄 · 펜 도구 위치 ---------- */
+@media (max-width: 760px) {
+  .mo { min-height: 0; }
+  .mo-week { min-height: 0; }
+  .mo-fg { grid-template-rows: 24px repeat(var(--lanes), 16px); row-gap: 2px; padding-bottom: 5px; }
+  .mo-dh { position: relative; justify-content: center; padding: 2px 0 0; }
+  .mo-dh .mo-num { width: 22px; height: 22px; font-size: 13px; }
+  .mo-memo-dot { position: absolute; top: 4px; right: 3px; width: 5px; height: 5px; }
+  .mi, .mb { margin: 0 1px; padding: 0 3px; border-radius: 3px; font-size: 10.5px; line-height: 16px; letter-spacing: -.02em; }
+  .mi { border-left-width: 2px; }
+  .mo-fg .mo-more { margin: 0 1px; padding-left: 3px; font-size: 10.5px; line-height: 16px; }
+  body[data-view='calendar'] .cal-side { display: none; }
+  body[data-view='calendar'] .qadd {
+    display: flex; gap: 8px; position: fixed; left: 12px; right: 12px; z-index: 29;
+    bottom: calc(72px + var(--safe-b));
+  }
+  .qadd input {
+    flex: 1; min-width: 0; height: 50px; padding: 0 16px; border: 1px solid var(--line); border-radius: 16px;
+    background: #fff; font-size: 16px; outline: 0; box-shadow: 0 6px 18px rgba(30, 45, 80, .12);
+  }
+  .qadd input:focus { border-color: var(--accent); }
+  .qadd-plus {
+    width: 50px; height: 50px; flex: none; display: grid; place-items: center; border-radius: 16px;
+    background: var(--accent); color: #fff; box-shadow: 0 8px 20px rgba(63, 95, 168, .35);
+  }
+  .qadd-plus svg { width: 26px; height: 26px; stroke-width: 2.3; }
+  body[data-view='calendar'] main { padding-bottom: calc(150px + var(--safe-b)); }
+  .pen-bar { top: 118px; }
+  .ed-range { grid-template-columns: 1fr 18px 1fr; gap: 4px; }
+  .ed-when .d { font-size: 15px; }
+  .mc-d { height: 40px; }
 }
