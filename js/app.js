@@ -1550,6 +1550,7 @@ function onClick(e) {
       render();
       break;
     case 'ink-color': INK.color = a.dataset.c; INK.eraser = false; localStorage.setItem('inkColor', INK.color); updatePenBar(); break;
+    case 'ink-width': INK.width = +a.dataset.w; INK.eraser = false; localStorage.setItem('inkWidth', String(INK.width)); updatePenBar(); break;
     case 'ink-eraser': INK.eraser = !INK.eraser; updatePenBar(); break;
     case 'ink-undo': inkUndo(); break;
     case 'ink-clear': inkClear(); break;
@@ -1802,9 +1803,11 @@ function afterTap(pointerType, fn) {
    펜 모드: 펜(또는 마우스)으로 시간표 전체에 자유롭게 쓰기, 손가락은 화면 이동.
    좌표는 칸 크기에 대한 비율(0~1)로 저장 → 노트북·패드·핸드폰 어디서 봐도 같은 시간 위치에 보임 */
 const INK_COLORS = ['#1f2329', '#3f5fa8', '#d0453f'];
+const INK_WIDTHS = [[1.4, '가늘게'], [2.4, '보통'], [4, '굵게'], [6.5, '아주 굵게']];
 const INK = {
   date: null, backend: null, unsub: null, strokes: [], ops: [],
   color: localStorage.getItem('inkColor') || INK_COLORS[0],
+  width: +localStorage.getItem('inkWidth') || 2.4, // 펜 굵기 (칸 너비 400px 기준 px)
   eraser: false,
   finger: localStorage.getItem('inkFinger') === '1',
   canvas: null, ctx: null, W: 0, H: 0, cur: null, saveTimer: null, lastPen: 0, fling: 0,
@@ -1813,6 +1816,9 @@ const INK = {
 function penBarHTML() {
   return `<div class="pen-bar">
     ${INK_COLORS.map((c) => `<button class="pen-c ${!INK.eraser && INK.color === c ? 'on' : ''}" style="--pc:${c}" data-act="ink-color" data-c="${c}" aria-label="펜 색"></button>`).join('')}
+    <span class="pen-sep"></span>
+    ${INK_WIDTHS.map(([w, name]) => `<button class="pen-w ${!INK.eraser && INK.width === w ? 'on' : ''}" data-act="ink-width" data-w="${w}" title="${name}" aria-label="펜 굵기 ${name}"><i style="width:${Math.round(w * 2 + 2)}px;height:${Math.round(w * 2 + 2)}px;background:${INK.color}"></i></button>`).join('')}
+    <span class="pen-sep"></span>
     <button class="tool ${INK.eraser ? 'on' : ''}" data-act="ink-eraser">지우개</button>
     <button class="tool" data-act="ink-undo">되돌리기</button>
     <button class="tool" data-act="ink-clear">모두 지우기</button>
@@ -1824,6 +1830,11 @@ function penBarHTML() {
 
 function updatePenBar() {
   $view.querySelectorAll('.pen-c').forEach((b) => b.classList.toggle('on', !INK.eraser && b.dataset.c === INK.color));
+  $view.querySelectorAll('.pen-w').forEach((b) => {
+    b.classList.toggle('on', !INK.eraser && +b.dataset.w === INK.width);
+    const dot = b.querySelector('i');
+    if (dot) dot.style.background = INK.color; // 굵기 점도 지금 펜 색으로
+  });
   $view.querySelector('[data-act="ink-eraser"]')?.classList.toggle('on', INK.eraser);
 }
 
@@ -2017,7 +2028,7 @@ function inkDown(e) {
   if (INK.eraser || penButton(e)) {
     INK.cur = { erase: true, removed: [] };
     if (inContact(e)) eraseAt(pt);
-  } else INK.cur = { c: INK.color, w: 2.4, pts: [pt] };
+  } else INK.cur = { c: INK.color, w: INK.width, pts: [pt] };
   const cv = INK.canvas;
   const move = (m) => {
     if (m.pointerId !== e.pointerId || !INK.cur) return;

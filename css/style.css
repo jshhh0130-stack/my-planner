@@ -685,6 +685,12 @@ canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3
 }
 .pen-c { width: 26px; height: 26px; border-radius: 50%; background: var(--pc); box-shadow: 0 0 0 2px #fff, 0 0 0 2px transparent; }
 .pen-c.on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--pc); }
+/* 펜 굵기: 점 크기로 보여 줌 */
+.pen-w { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; border: 1.5px solid transparent; }
+.pen-w i { display: block; border-radius: 50%; }
+.pen-w:hover { background: var(--bg2); }
+.pen-w.on { border-color: var(--ink); background: var(--bg2); }
+.pen-sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
 .pen-bar .tool.on { background: var(--ink); color: #fff; }
 .pen-bar .ck { margin-left: 4px; font-size: 13px; }
 
