@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="나만 쓰는 데일리 플래너">
+  <meta name="robots" content="noindex">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="플래너">
+  <title>데일리 플래너</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body data-view="today">
+  <div class="update-bar" id="updateBar" hidden>새 버전이 나왔어요 <button type="button">지금 업데이트</button></div>
+
+  <header class="topbar">
+    <button class="brand" data-act="go" data-view="today">데일리 플래너</button>
+    <nav class="tabs" aria-label="화면">
+      <button data-act="go" data-view="today">오늘</button>
+      <button data-act="go" data-view="calendar">캘린더</button>
+      <button data-act="go" data-view="records">기록</button>
+    </nav>
+    <div class="top-right">
+      <button class="sync-pill" id="syncPill" data-act="settings"><i></i><span>이 기기에 저장됨</span></button>
+      <button class="icon-btn top-gear" data-act="settings" aria-label="설정">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="view"><div class="empty-big">불러오는 중…</div></main>
+
+  <nav class="bottom-nav" aria-label="화면">
+    <button data-act="go" data-view="today">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/></svg><span>오늘</span>
+    </button>
+    <button data-act="go" data-view="calendar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.8h16M8.5 3.2v3.6M15.5 3.2v3.6"/></svg><span>캘린더</span>
+    </button>
+    <button data-act="go" data-view="records">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h9.5A2.5 2.5 0 0118 7v13H8.5A2.5 2.5 0 016 17.5z"/><path d="M6 17.5A2.5 2.5 0 018.5 15H18"/></svg><span>기록</span>
+    </button>
+    <button data-act="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg><span>설정</span>
+    </button>
+  </nav>
+
+  <button class="fab" data-act="fab" aria-label="빠르게 적기">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+
+  <div id="overlay"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="filePick" accept="image/*" multiple hidden>
+  <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
+  <input type="file" id="fileImport" accept="application/json,.json" hidden>
+</body>
+</html>
