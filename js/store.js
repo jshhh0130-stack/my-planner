@@ -10,7 +10,7 @@ export function emptyDay(date) {
   return {
     date,
     goal: '',
-    priorities: Array.from({ length: PRI_N }, () => ({ text: '', done: false })),
+    priorities: Array.from({ length: PRI_N }, () => ({ text: '', done: false, missed: false })),
     tasks: [],
     notes: [],
     carried: false,
@@ -23,7 +23,11 @@ export function normDay(d) {
   const out = emptyDay(d.date);
   out.goal = typeof d.goal === 'string' ? d.goal : '';
   const p = Array.isArray(d.priorities) ? d.priorities : [];
-  out.priorities = out.priorities.map((_, i) => ({ text: p[i]?.text || '', done: !!p[i]?.done }));
+  out.priorities = out.priorities.map((_, i) => ({
+    text: p[i]?.text || '',
+    done: !!p[i]?.done,
+    missed: !p[i]?.done && !!p[i]?.missed, // ✓ 했음 / ✗ 못함 (둘 중 하나만)
+  }));
   out.tasks = (Array.isArray(d.tasks) ? d.tasks : [])
     .filter(Boolean)
     .map((t) => ({ id: t.id || uid(), text: t.text || '', done: !!t.done }));

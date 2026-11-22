@@ -50,6 +50,7 @@ const S = {
     scrolled: false,
   },
   rec: { q: '', filter: 'all', limit: 20 },
+  memoDays: 14,
 };
 
 let pendingRender = false;
@@ -217,25 +218,19 @@ function todayHTML() {
   ${bannersHTML(k, d)}
   <div class="seg day-seg">
     <button class="${S.pane === 'tasks' ? 'on' : ''}" data-act="pane" data-pane="tasks">할 일<em data-count="tasks">${items.filter((x) => x.done).length}/${items.length}</em></button>
-    <button class="${S.pane === 'schedule' ? 'on' : ''}" data-act="pane" data-pane="schedule">시간표<em data-count="sched">${evs.length}</em></button>
     <button class="${S.pane === 'memo' ? 'on' : ''}" data-act="pane" data-pane="memo">메모<em data-count="memo">${d.notes.length}</em></button>
+    <button class="${S.pane === 'schedule' ? 'on' : ''}" data-act="pane" data-pane="schedule">시간표<em data-count="sched">${evs.length}</em></button>
   </div>
   <div class="day-grid" data-pane="${S.pane}">
-    <section class="col col-schedule">
-      <h3 class="label">시간표<button class="mini" data-act="new-event" data-date="${k}">${I.plus}일정</button></h3>
-      ${allDayHTML(k)}
-      ${timeGridHTML([k])}
-      <p class="hint">빈 칸을 누르면 바로 적혀요 · ${isPhone() ? '일정을 꾹 누르면 옮길 수 있어요' : '일정은 끌어서 옮기고, 아래 끝을 당겨 길이 조절'}</p>
-    </section>
     <section class="col col-tasks">
       <h3 class="label">오늘의 목표</h3>
       <input class="goal-input" data-bind="goal" value="${esc(d.goal)}" placeholder="오늘을 한 줄로 정해 보세요" autocomplete="off" enterkeyhint="next">
-      <h3 class="label">우선순위<small data-count="pri">${prFilled.filter((p) => p.done).length}/${prFilled.length}</small></h3>
+      <h3 class="label">우선순위<small data-count="pri">${priSummary(d)}</small><span class="pri-legend"><i>했음</i><i>못함</i></span></h3>
       <ol class="pri-list ${showAll ? 'all' : ''}">
-        ${pr.map((p, i) => `<li class="pri ${p.done ? 'done' : ''} ${i >= 5 ? 'extra' : ''}">
+        ${pr.map((p, i) => `<li class="pri ${p.done ? 'done' : ''} ${p.missed ? 'miss' : ''} ${i >= 5 ? 'extra' : ''}">
           <span class="pri-no">${pad(i + 1)}</span>
           <input class="pri-input" data-bind="pri" data-i="${i}" value="${esc(p.text)}" placeholder="${i === 0 ? '오늘 가장 중요한 일' : ''}" autocomplete="off" enterkeyhint="next">
-          <span class="chk-cell"><button class="chk ${p.done ? 'on' : ''}" data-act="pri-toggle" data-i="${i}" ${p.text ? '' : 'disabled'} aria-label="완료">${I.check}</button></span>
+          ${marksHTML(k, i, p)}
         </li>`).join('')}
       </ol>
       ${showAll ? '' : `<button class="more-pri" data-act="pri-more">${I.plus} 6~10번 칸 펼치기</button>`}
@@ -243,14 +238,37 @@ function todayHTML() {
       <ul class="task-list">
         ${d.tasks.map(taskRowHTML).join('')}
         <li class="task new"><form data-form="task-new" data-date="${k}"><input class="task-input" name="t" placeholder="+ 할 일 추가 (Enter)" autocomplete="off" enterkeyhint="done"></form><span class="chk-cell"></span></li>
-        ${'<li class="task filler" aria-hidden="true"><span></span><span class="chk-cell"></span></li>'.repeat(Math.max(0, 7 - d.tasks.length))}
+        ${'<li class="task filler" aria-hidden="true"><span></span><span class="chk-cell"></span></li>'.repeat(Math.max(0, 5 - d.tasks.length))}
       </ul>
     </section>
     <section class="col col-memo">
-      <h3 class="label">메모<small>글 · 사진</small></h3>
-      ${memoHTML(k)}
+      <h3 class="label">메모<small>글 · 사진 · 지난 메모까지 이어서</small></h3>
+      ${memoHTML(k, { feed: true })}
+    </section>
+    <section class="col col-schedule">
+      <h3 class="label">시간표<button class="mini" data-act="new-event" data-date="${k}">${I.plus}일정</button></h3>
+      ${allDayHTML(k)}
+      ${timeGridHTML([k])}
+      <p class="hint">빈 칸을 누르면 바로 적혀요 · ${isPhone() ? '일정을 꾹 누르면 옮길 수 있어요' : '일정은 끌어서 옮기고, 아래 끝을 당겨 길이 조절'}</p>
     </section>
   </div>`;
+}
+
+// 우선순위 오른쪽: ✓ 했음 / ✗ 못함
+function marksHTML(k, i, p) {
+  const off = p.text ? '' : 'disabled';
+  return `<span class="marks">
+    <button class="mk ok ${p.done ? 'on' : ''}" data-act="pri-mark" data-v="done" data-i="${i}" data-date="${k}" ${off} aria-label="했어요" title="했어요">${I.check}</button>
+    <button class="mk no ${p.missed ? 'on' : ''}" data-act="pri-mark" data-v="miss" data-i="${i}" data-date="${k}" ${off} aria-label="못 했어요" title="못 했어요">${I.x}</button>
+  </span>`;
+}
+
+function priSummary(d) {
+  const pr = d.priorities.filter((p) => p.text);
+  if (!pr.length) return '0/0';
+  const done = pr.filter((p) => p.done).length;
+  const miss = pr.filter((p) => p.missed).length;
+  return `${done}/${pr.length} 완료${miss ? ` · ${miss} 못함` : ''}`;
 }
 
 const taskRowHTML = (t) => `<li class="task ${t.done ? 'done' : ''}">
@@ -351,10 +369,11 @@ function evBlockHTML(it, k) {
     <div class="ev-title">${esc(e.title) || '(제목 없음)'}</div><i class="ev-resize"></i></div>`;
 }
 
-/* 메모 (그때그때 적는 곳) */
-function memoHTML(k) {
+/* 메모 (그때그때 적는 곳) — feed: 오늘 메모 아래로 지난 메모까지 이어서 보여 줌 */
+function memoHTML(k, { feed = false } = {}) {
   const d = store.day(k);
   const notes = [...d.notes].sort((a, b) => b.at - a.at);
+  const list = `<ul class="notes">${notes.map((n) => noteHTML(k, n)).join('') || '<li class="empty">아직 메모가 없어요</li>'}</ul>`;
   return `<div class="memo-box">
     <textarea class="memo-input" data-memo="${k}" rows="2" placeholder="생각난 걸 바로 적어 두세요">${esc(getDraft(k))}</textarea>
     <div class="memo-tools">
@@ -365,7 +384,23 @@ function memoHTML(k) {
       <button class="btn sm primary" data-act="memo-save" data-date="${k}">저장</button>
     </div>
   </div>
-  <ul class="notes">${notes.map((n) => noteHTML(k, n)).join('') || '<li class="empty">아직 메모가 없어요</li>'}</ul>`;
+  ${feed ? `<div class="memo-feed" data-keep-scroll="memo-${k}">${list}${pastNotesHTML(k)}</div>` : list}`;
+}
+
+function pastNotesHTML(k) {
+  const days = [...store.days.values()]
+    .filter((d) => d.date < k && d.notes.length)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  if (!days.length) return '';
+  const shown = days.slice(0, S.memoDays);
+  return `<div class="past">
+    <div class="past-head"><span>지난 메모</span></div>
+    ${shown.map((d) => `<section class="past-day">
+      <button class="past-date" data-act="open-day" data-date="${d.date}">${md(d.date)} (${WD[wdIdx(d.date)]})<span>${relLabel(d.date)}</span></button>
+      <ul class="notes">${[...d.notes].sort((a, b) => b.at - a.at).map((n) => noteHTML(d.date, n)).join('')}</ul>
+    </section>`).join('')}
+    ${days.length > shown.length ? `<button class="btn wide" data-act="memo-more">지난 메모 더 보기 (${days.length - shown.length}일)</button>` : ''}
+  </div>`;
 }
 
 function photosHTML(k, n) {
@@ -441,11 +476,19 @@ function monthHTML() {
     const evs = store.eventsOn(k);
     const pr = d.priorities.filter((p) => p.text);
     const done = pr.filter((p) => p.done).length;
+    const miss = pr.filter((p) => p.missed).length;
     return `<div class="mo-cell ${dt.getMonth() !== m ? 'out' : ''} ${k === today ? 'today' : ''} ${k === S.cal.sel ? 'sel' : ''} ${wdClass(i % 7)}" data-act="pick-day" data-date="${k}">
-      <div class="mo-top"><span class="mo-num">${dt.getDate()}</span>${pr.length ? `<span class="mo-pri ${done === pr.length ? 'all' : ''}">${done}/${pr.length}</span>` : ''}</div>
-      <div class="mo-evs">${evs.slice(0, 3).map((e) => `<div class="mo-ev c-${e.color}" draggable="true" data-act="edit-event" data-id="${e.id}" data-date="${k}">${e.allDay ? '' : `<b>${e.start}</b>`}${esc(e.title) || '(제목 없음)'}</div>`).join('')}${evs.length > 3 ? `<div class="mo-more">+${evs.length - 3}개</div>` : ''}</div>
+      <div class="mo-top">
+        <span class="mo-num">${dt.getDate()}</span>
+        ${pr.length ? `<span class="mo-pri ${done === pr.length ? 'all' : ''}" title="우선순위 ${done}/${pr.length} 완료">✓ ${done}/${pr.length}</span>` : ''}
+        <button class="mo-add" data-act="new-event" data-date="${k}" aria-label="${md(k)} 일정 추가" title="일정 추가">${I.plus}</button>
+      </div>
+      <div class="mo-evs">${evs.slice(0, 4).map((e) => `<div class="mo-ev c-${e.color}" draggable="true" data-act="edit-event" data-id="${e.id}" data-date="${k}">${e.allDay ? '' : `<b>${e.start}</b>`}${esc(e.title) || '(제목 없음)'}</div>`).join('')}${evs.length > 4 ? `<div class="mo-more">+${evs.length - 4}개 더</div>` : ''}</div>
       <div class="mo-dots">${evs.slice(0, 4).map((e) => `<i class="c-${e.color}"></i>`).join('')}${d.notes.length ? '<i class="memo"></i>' : ''}</div>
-      ${d.notes.length ? `<div class="mo-foot">${I.memo}<span>${d.notes.length}</span></div>` : ''}
+      <div class="mo-foot">
+        ${d.notes.length ? `<span class="mo-memo">${I.memo}${d.notes.length}</span>` : ''}
+        ${pr.length ? `<span class="mo-bar" title="우선순위 진행"><i style="width:${(done / pr.length) * 100}%"></i><i class="x" style="width:${(miss / pr.length) * 100}%"></i></span>` : ''}
+      </div>
     </div>`;
   }).join('');
   return `<div class="mo">
@@ -466,8 +509,8 @@ function weekHTML() {
     const ad = store.eventsOn(k).filter((e) => e.allDay);
     return `<div class="wk-top-cell ${k === S.cal.sel ? 'sel' : ''}" data-act="pick-day" data-date="${k}">
       ${ad.map((e) => `<div class="chip-ev c-${e.color}" data-act="edit-event" data-id="${e.id}" data-date="${k}">${esc(e.title)}</div>`).join('')}
-      ${pr.slice(0, 3).map((p) => `<div class="wk-pri ${p.done ? 'done' : ''}">${esc(p.text)}</div>`).join('')}
-      ${pr.length > 3 ? `<div class="wk-more">+${pr.length - 3}</div>` : ''}</div>`;
+      ${pr.slice(0, 4).map((p) => `<div class="wk-pri ${p.done ? 'done' : ''} ${p.missed ? 'miss' : ''}">${esc(p.text)}</div>`).join('')}
+      ${pr.length > 4 ? `<div class="wk-more">+${pr.length - 4}</div>` : ''}</div>`;
   }).join('');
   return `<div class="wk">
     <div class="wk-head"><div></div>${head}</div>
@@ -480,7 +523,6 @@ function sideHTML(k) {
   const d = store.day(k);
   const evs = store.eventsOn(k);
   const pr = d.priorities.map((p, i) => ({ ...p, i })).filter((p) => p.text);
-  const done = pr.filter((p) => p.done).length;
   return `<div class="side-head">
       <div><div class="side-date">${md(k)} ${WD_FULL[wdIdx(k)]}</div><div class="side-sub">${relLabel(k)}</div></div>
       <button class="btn sm" data-act="open-day" data-date="${k}">플래너 열기${I.right}</button>
@@ -492,9 +534,9 @@ function sideHTML(k) {
         <span class="t">${e.allDay ? '하루 종일' : `${e.start}–${e.end}`}</span><span class="n">${esc(e.title) || '(제목 없음)'}</span>${e.repeat !== 'none' ? '<span class="r">↻</span>' : ''}</li>`).join('')}</ul>` : '<p class="empty">일정이 없어요</p>'}
     </div>
     <div class="side-sec">
-      <h3 class="label">우선순위<small>${done}/${pr.length}</small></h3>
-      ${pr.length ? `<ul class="side-pri">${pr.map((p) => `<li class="${p.done ? 'done' : ''}">
-        <button class="chk ${p.done ? 'on' : ''}" data-act="pri-toggle" data-date="${k}" data-i="${p.i}" aria-label="완료">${I.check}</button><span>${esc(p.text)}</span></li>`).join('')}</ul>`
+      <h3 class="label">우선순위<small>${priSummary(d)}</small><span class="pri-legend"><i>했음</i><i>못함</i></span></h3>
+      ${pr.length ? `<ul class="side-pri">${pr.map((p) => `<li class="${p.done ? 'done' : ''} ${p.missed ? 'miss' : ''}">
+        <span class="t">${esc(p.text)}</span>${marksHTML(k, p.i, p)}</li>`).join('')}</ul>`
         : `<p class="empty">아직 정하지 않았어요 · <button class="link" data-act="open-day" data-date="${k}">플래너에서 적기</button></p>`}
     </div>
     <div class="side-sec">
@@ -557,7 +599,7 @@ function recCardHTML(d, q, f) {
       ${pr.length ? `<span class="rec-stat">✓ ${done}/${pr.length}</span>` : ''}
     </div>
     ${d.goal && f !== 'photo' ? `<p class="rec-goal">${hl(d.goal, q)}</p>` : ''}
-    ${pr.length && f !== 'photo' ? `<ul class="rec-pri">${pr.filter((p) => (f === 'done' ? p.done : true)).map((p) => `<li class="${p.done ? 'done' : ''}">${hl(p.text, q)}</li>`).join('')}</ul>` : ''}
+    ${pr.length && f !== 'photo' ? `<ul class="rec-pri">${pr.filter((p) => (f === 'done' ? p.done : true)).map((p) => `<li class="${p.done ? 'done' : ''} ${p.missed ? 'miss' : ''}">${hl(p.text, q)}</li>`).join('')}</ul>` : ''}
     ${tasks.length && f !== 'photo' && f !== 'memo' ? `<ul class="rec-pri rec-tasks">${tasks.map((t) => `<li class="${t.done ? 'done' : ''}">${hl(t.text, q)}</li>`).join('')}</ul>` : ''}
     ${notes.length && f !== 'done' ? `<ul class="notes rec-notes">${notes.map((n) => `<li class="note">
       <div class="note-meta"><time>${hhmm(n.at)}</time></div>
@@ -876,7 +918,7 @@ function updateCounts() {
   const pr = d.priorities.filter((p) => p.text);
   const all = [...pr, ...d.tasks.filter((t) => t.text)];
   const set = (sel, txt) => { const el = $view.querySelector(sel); if (el) el.textContent = txt; };
-  set('[data-count="pri"]', `${pr.filter((p) => p.done).length}/${pr.length}`);
+  set('[data-count="pri"]', priSummary(d));
   set('[data-count="tasks"]', `${all.filter((x) => x.done).length}/${all.length}`);
   set('[data-count="memo"]', String(d.notes.length));
   $view.querySelector(`.ws-day[data-date="${S.date}"] .ws-dot`)?.classList.toggle('off', !dayHasAny(S.date));
@@ -888,17 +930,25 @@ function popCheck(el) {
   el.classList.add('pop');
 }
 
-function togglePri(a, k) {
+// ✓(했음) / ✗(못함) — 같은 버튼을 다시 누르면 표시 지움
+function markPri(a, k) {
   const i = +a.dataset.i;
-  let on = false;
+  const v = a.dataset.v;
+  let st = { done: false, missed: false };
   store.editDay(k, (d) => {
     const p = d.priorities[i];
-    if (p.text) { p.done = !p.done; on = p.done; }
+    if (!p.text) return;
+    if (v === 'done') { p.done = !p.done; if (p.done) p.missed = false; }
+    else { p.missed = !p.missed; if (p.missed) p.done = false; }
+    st = { done: p.done, missed: p.missed };
   });
-  if (S.view === 'today') {
-    a.classList.toggle('on', on);
-    a.closest('.pri')?.classList.toggle('done', on);
-    if (on) popCheck(a);
+  const li = a.closest('.pri');
+  if (S.view === 'today' && li) {
+    li.classList.toggle('done', st.done);
+    li.classList.toggle('miss', st.missed);
+    li.querySelector('.mk.ok').classList.toggle('on', st.done);
+    li.querySelector('.mk.no').classList.toggle('on', st.missed);
+    if (st.done || st.missed) popCheck(a);
     updateCounts();
   } else render();
 }
@@ -935,7 +985,7 @@ function carry(k) {
   store.editDay(k, (d) => {
     for (const text of items) {
       const slot = d.priorities.findIndex((p) => !p.text);
-      if (slot >= 0) d.priorities[slot] = { text, done: false };
+      if (slot >= 0) d.priorities[slot] = { text, done: false, missed: false };
       else d.tasks.push({ id: uid(), text, done: false });
     }
     d.carried = true;
@@ -1069,7 +1119,8 @@ function onClick(e) {
       break;
     case 'pane': S.pane = a.dataset.pane; render(); if (S.pane === 'schedule') scrollToNow(); break;
     case 'pri-more': S.showAllPri = true; render({ focus: '[data-bind="pri"][data-i="5"]' }); break;
-    case 'pri-toggle': togglePri(a, k); break;
+    case 'pri-mark': markPri(a, k); break;
+    case 'memo-more': S.memoDays += 14; render(); break;
     case 'task-toggle': toggleTask(a, k); break;
     case 'task-del': store.editDay(k, (d) => { d.tasks = d.tasks.filter((t) => t.id !== a.dataset.id); }); render(); break;
     case 'carry': carry(k); break;
@@ -1134,14 +1185,14 @@ function onInput(e) {
     const filled = !!el.value.trim();
     store.editDay(k, (d) => {
       d.priorities[i].text = el.value;
-      if (!filled) d.priorities[i].done = false;
+      if (!filled) { d.priorities[i].done = false; d.priorities[i].missed = false; }
     });
     const li = el.closest('.pri');
-    const btn = li?.querySelector('.chk');
-    if (btn) {
+    li?.querySelectorAll('.mk').forEach((btn) => {
       btn.disabled = !filled;
-      if (!filled) { btn.classList.remove('on'); li.classList.remove('done'); }
-    }
+      if (!filled) btn.classList.remove('on');
+    });
+    if (li && !filled) li.classList.remove('done', 'miss');
   } else if (b === 'task') {
     store.editDay(k, (d) => { const t = d.tasks.find((x) => x.id === el.dataset.id); if (t) t.text = el.value; });
   } else if (b === 'rec-q') {
@@ -1610,6 +1661,7 @@ async function seedDemo() {
   store.editDay(addDays(t, -1), (d) => {
     d.priorities[0] = { text: '은행 서류 준비', done: false };
     d.priorities[1] = { text: '리포트 초안', done: true };
+    d.priorities[2] = { text: '헬스 가기', done: false, missed: true };
     d.notes = [{ id: uid(), text: '어제 적은 메모 예시', at: ago(60 * 26), photos: [] }];
   });
   store.editDay(addDays(t, 1), (d) => { d.priorities[0] = { text: '면접 준비', done: false }; });
