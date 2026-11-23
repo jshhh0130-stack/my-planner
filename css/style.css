@@ -672,7 +672,8 @@ mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 1px; 
   background: var(--c-bg); color: var(--c-ink); cursor: pointer;
 }
 .mi { border-left: 3px solid var(--c); }
-.mi.ad { background: var(--c); color: #fff; border-left: 0; font-weight: 700; }
+/* 하루짜리 '하루 종일' 일정: 연한 파랑 (여러 날 막대는 진한 파랑, 시간 일정은 아주 옅은 바탕 + 왼쪽 선) */
+.mi.ad { background: color-mix(in srgb, var(--c) 30%, #fff); color: var(--c-ink); border-left: 0; font-weight: 700; }
 .mi b { font-weight: 800; margin-right: 4px; }
 .mb { background: var(--c); color: #fff; font-weight: 700; }
 .mb.cl { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
