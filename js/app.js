@@ -56,6 +56,9 @@ const S = {
   rec: { q: '', filter: 'all', limit: 20 },
   memoDays: 14,
   pen: localStorage.getItem('penMode') === '1', // 시간표 펜(S펜) 필기 모드
+  memoSearch: false, // 메모 찾기 창
+  memoQ: '',
+  memoHit: 0,
   full: false, // 시간표 전체 보기
   fullHour: +localStorage.getItem('fullHour') || 80, // 전체 보기에서 한 시간 칸 높이(확대)
 };
@@ -171,6 +174,7 @@ function render(opts = {}) {
   if (opts.focus) focusEl($view.querySelector(opts.focus));
   modal?.refresh?.(); // 열려 있는 날짜 창(핸드폰)도 최신으로
   attachInk();
+  if (S.view === 'today' && S.memoSearch) memoHits(false);
   renderStatus();
 }
 
@@ -271,7 +275,8 @@ function todayHTML() {
       </ul>
     </section>
     <section class="col col-memo">
-      <h3 class="label">메모<small>글 · 사진 · 지난 메모까지 이어서</small></h3>
+      <h3 class="label">메모<small>글 · 사진 · 지난 메모까지 이어서</small><button class="mini ${S.memoSearch ? 'on' : ''}" data-act="memo-search" title="메모에서 찾기">${I.search}찾기</button></h3>
+      ${S.memoSearch ? `<div class="msearch">${I.search}<input data-msearch value="${esc(S.memoQ)}" placeholder="지금까지 쓴 메모에서 찾기" autocomplete="off" enterkeyhint="search"><span class="mcount"></span><button class="icon-btn sm" data-act="mhit" data-n="-1" aria-label="위로">▲</button><button class="icon-btn sm" data-act="mhit" data-n="1" aria-label="아래로">▼</button><button class="icon-btn sm" data-act="memo-search" aria-label="닫기">${I.x}</button></div>` : ''}
       ${memoHTML(k, { feed: true })}
     </section>
     <section class="col col-schedule ${S.pen ? 'pen-on' : ''}" ${S.full ? `data-keep-scroll="full" style="--full-hour:${S.fullHour}px"` : ''}>
@@ -460,12 +465,45 @@ function memoHTML(k, { feed = false } = {}) {
   ${feed ? `<div class="memo-feed" data-keep-scroll="memo-${k}">${list}${pastNotesHTML(k)}</div>` : list}`;
 }
 
+/* 메모 찾기: 찾은 곳을 노랗게, ▲▼(또는 Enter)로 위아래 이동 — 카톡처럼 */
+function memoFeedRefresh() {
+  const feed = $view.querySelector('.col-memo .memo-feed');
+  if (!feed) return;
+  const k = S.date;
+  const d = store.day(k);
+  const notes = [...d.notes].sort((a, b) => b.at - a.at);
+  feed.innerHTML = `<ul class="notes">${notes.map((n) => noteHTML(k, n)).join('') || '<li class="empty">아직 메모가 없어요</li>'}</ul>${pastNotesHTML(k)}`;
+  hydratePhotos(feed);
+}
+
+function memoHits(go) {
+  const feed = $view.querySelector('.col-memo .memo-feed');
+  const count = $view.querySelector('.msearch .mcount');
+  if (!feed || !count) return;
+  const marks = [...feed.querySelectorAll('mark')];
+  marks.forEach((m) => m.classList.remove('cur'));
+  if (!S.memoQ.trim()) { count.textContent = ''; return; }
+  if (!marks.length) { count.textContent = '없음'; return; }
+  S.memoHit = (S.memoHit + marks.length) % marks.length;
+  const m = marks[S.memoHit];
+  m.classList.add('cur');
+  count.textContent = `${S.memoHit + 1}/${marks.length}`;
+  if (go) m.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function memoSearchInput(v) {
+  S.memoQ = v;
+  S.memoHit = 0;
+  memoFeedRefresh();
+  memoHits(true);
+}
+
 function pastNotesHTML(k) {
   const days = [...store.days.values()]
     .filter((d) => d.date < k && d.notes.length)
     .sort((a, b) => b.date.localeCompare(a.date));
   if (!days.length) return '';
-  const shown = days.slice(0, S.memoDays);
+  const shown = S.memoQ ? days : days.slice(0, S.memoDays); // 찾는 중이면 전부
   return `<div class="past">
     <div class="past-head"><span>지난 메모</span></div>
     ${shown.map((d) => `<section class="past-day">
@@ -495,7 +533,7 @@ function noteHTML(k, n) {
   }
   return `<li class="note">
     <div class="note-meta"><time>${hhmm(n.at)}</time><button class="mini ghost" data-act="note-edit" data-date="${k}" data-id="${n.id}">수정</button></div>
-    ${n.text ? `<div class="note-text">${richText(n.text)}</div>` : ''}
+    ${n.text ? `<div class="note-text">${S.memoQ ? hl(n.text, S.memoQ.trim().toLowerCase(), true) : richText(n.text)}</div>` : ''}
     ${photosHTML(k, n)}</li>`;
 }
 
@@ -1543,6 +1581,14 @@ function onClick(e) {
       render();
       if (S.pen) toast('펜으로 자유롭게 쓰세요 · 펜 버튼 누르고 문지르면 지우개');
       break;
+    case 'memo-search':
+      S.memoSearch = !S.memoSearch;
+      if (!S.memoSearch) S.memoQ = '';
+      if (S.memoSearch && isPhone()) S.pane = 'memo';
+      S.memoHit = 0;
+      render(S.memoSearch ? { focus: '[data-msearch]' } : {});
+      break;
+    case 'mhit': S.memoHit += +a.dataset.n; memoHits(true); break;
     case 'full-toggle': setFull(!S.full); break;
     case 'zoom':
       S.fullHour = clamp(S.fullHour + 16 * +a.dataset.n, 48, 176);
@@ -1616,6 +1662,7 @@ function onClick(e) {
 
 function onInput(e) {
   const el = e.target;
+  if (el.matches?.('[data-msearch]')) { memoSearchInput(el.value); return; }
   if (el.dataset.memo) { setDraft(el.dataset.memo, el.value); autoGrow(el); return; }
   if (el.matches('[data-note-edit]')) { autoGrow(el); return; }
   const b = el.dataset.bind;
@@ -1674,6 +1721,12 @@ function doEnter(el) {
 function onKeydown(e) {
   const el = e.target;
   if (e.key === 'Escape' && el.closest?.('.slot-input')) { el.closest('.slot-input').remove(); return; }
+  if (el.matches?.('[data-msearch]') && e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
+    e.preventDefault();
+    S.memoHit += e.shiftKey ? -1 : 1; // Enter 다음, Shift+Enter 이전
+    memoHits(true);
+    return;
+  }
   if (e.key === 'Enter' && !e.shiftKey && isEnterField(el)) {
     if (e.isComposing || e.keyCode === 229) {
       // 한글 조합 중 Enter: 조합이 끝나면 처리 (조합 끝 신호가 안 오는 키보드는 잠시 뒤 처리)
