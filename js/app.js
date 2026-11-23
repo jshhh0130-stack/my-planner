@@ -92,7 +92,7 @@ function eventsOn(k) {
 }
 // 불러온 일정은 그 캘린더의 색으로
 // 하루 종일은 진한 색 막대, 시간이 정해진 일정은 연한 색 바탕 (파랑: 저장 버튼과 같은 색)
-const extVars = (e) => (e.ext ? `--c:${e.extColor};--c-bg:${e.extColor === '#d24a4a' ? '#fbe9e9' : '#e8eef9'};--c-ink:${e.extColor === '#d24a4a' ? '#7d2020' : '#24406f'};` : '');
+const extVars = (e) => (e.ext ? `--c:${e.extColor};--c-bg:${e.extColor === '#d24a4a' ? '#fbe9e9' : '#e8eef9'};--c-ink:${e.extColor === '#d24a4a' ? '#7d2020' : '#24406f'};${e.extColor === '#d24a4a' ? '' : '--c-ad:#2b8fe0;--c-ad-ink:#fff;'}` : '');
 const extAttr = (e) => (e.ext ? ` style="${extVars(e)}"` : '');
 const extCls = (e) => (e.ext ? ' ext' : '');
 // 목록에 쓰는 시간 글자 (여러 날 일정은 이어짐 표시)
@@ -101,6 +101,10 @@ const evTimeText = (e) => (e.allDay ? '하루 종일'
     : e._multi === 'last' ? `→ ${e.end}`
       : `${e.start}–${e.end}`);
 const wdClass = (i) => (i === 5 ? 'sat' : i === 6 ? 'sun' : '');
+// 화면의 요일 순서: 일 월 화 수 목 금 토 (저장은 월=0 … 일=6 그대로)
+const ORD = [6, 0, 1, 2, 3, 4, 5];
+const colWd = (i) => WD[ORD[i]];
+const colCls = (i) => wdClass(ORD[i]);
 
 function getDraft(k) {
   if (S.drafts[k] != null) return S.drafts[k];
@@ -221,8 +225,8 @@ function todayHTML() {
   const ws = startOfWeek(k);
   const strip = Array.from({ length: 7 }, (_, i) => {
     const x = addDays(ws, i);
-    return `<button class="ws-day ${x === k ? 'on' : ''} ${x === today ? 'today' : ''} ${wdClass(i)}" data-act="goto-day" data-date="${x}">
-      <span class="ws-wd">${WD[i]}</span><span class="ws-dn">${parseKey(x).getDate()}</span><i class="ws-dot ${dayHasAny(x) ? '' : 'off'}"></i></button>`;
+    return `<button class="ws-day ${x === k ? 'on' : ''} ${x === today ? 'today' : ''} ${colCls(i)}" data-act="goto-day" data-date="${x}">
+      <span class="ws-wd">${colWd(i)}</span><span class="ws-dn">${parseKey(x).getDate()}</span><i class="ws-dot ${dayHasAny(x) ? '' : 'off'}"></i></button>`;
   }).join('');
 
   const pr = d.priorities;
@@ -627,12 +631,12 @@ function monthHTML() {
       else if (over > 0) items.push({ t: 'more', c, n: over });
     });
 
-    const bg = dates.map((k, i) => `<div class="mo-cell ${parseKey(k).getMonth() !== m ? 'out' : ''} ${k === today ? 'today' : ''} ${k === S.cal.sel ? 'sel' : ''} ${wdClass(i)}" data-act="pick-day" data-date="${k}"></div>`).join('');
+    const bg = dates.map((k, i) => `<div class="mo-cell ${parseKey(k).getMonth() !== m ? 'out' : ''} ${k === today ? 'today' : ''} ${k === S.cal.sel ? 'sel' : ''} ${colCls(i)}" data-act="pick-day" data-date="${k}"></div>`).join('');
     const heads = dates.map((k, i) => {
       const d = store.day(k);
       const pr = d.priorities.filter((p) => p.text);
       const done = pr.filter((p) => p.done).length;
-      const numCls = `mo-num ${wdClass(i)} ${k === today ? 'is-today' : ''} ${parseKey(k).getMonth() !== m ? 'out' : ''}`;
+      const numCls = `mo-num ${colCls(i)} ${k === today ? 'is-today' : ''} ${parseKey(k).getMonth() !== m ? 'out' : ''}`;
       return `<div class="mo-dh" style="grid-column:${i + 1}"><span class="${numCls}">${parseKey(k).getDate()}</span>
         ${!phone && pr.length ? `<span class="mo-pri ${done === pr.length ? 'all' : ''}" title="우선순위 ${done}/${pr.length} 완료">✓ ${done}/${pr.length}</span>` : ''}
         ${d.notes.length ? `<i class="mo-memo-dot" title="메모 ${d.notes.length}개"></i>` : ''}
@@ -654,7 +658,7 @@ function monthHTML() {
     html += `<div class="mo-week"><div class="mo-bg">${bg}</div><div class="mo-fg" style="--lanes:${L}">${heads}${evs}</div></div>`;
   }
   return `<div class="mo">
-    <div class="mo-wd">${WD.map((w, i) => `<span class="${wdClass(i)}">${w}</span>`).join('')}</div>
+    <div class="mo-wd">${ORD.map((o) => `<span class="${wdClass(o)}">${WD[o]}</span>`).join('')}</div>
     <div class="mo-weeks">${html}</div>
   </div>`;
 }
@@ -696,8 +700,8 @@ function weekHTML() {
   const start = startOfWeek(S.cal.anchor);
   const dates = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const today = todayKey();
-  const head = dates.map((k, i) => `<button class="wk-d ${k === today ? 'today' : ''} ${k === S.cal.sel ? 'sel' : ''} ${wdClass(i)}" data-act="pick-day" data-date="${k}">
-      <span class="wk-wd">${WD[i]}</span><span class="wk-dn">${parseKey(k).getDate()}</span></button>`).join('');
+  const head = dates.map((k, i) => `<button class="wk-d ${k === today ? 'today' : ''} ${k === S.cal.sel ? 'sel' : ''} ${colCls(i)}" data-act="pick-day" data-date="${k}">
+      <span class="wk-wd">${colWd(i)}</span><span class="wk-dn">${parseKey(k).getDate()}</span></button>`).join('');
   const top = dates.map((k) => {
     const d = store.day(k);
     const pr = d.priorities.filter((p) => p.text);
@@ -866,13 +870,13 @@ function openEventEditor(o = {}) {
     </div>
     <div class="mini-cal">
       <div class="mc-head"><button type="button" class="icon-btn sm" data-mc="-1" aria-label="이전 달">${I.left}</button><b class="mc-title"></b><button type="button" class="icon-btn sm" data-mc="1" aria-label="다음 달">${I.right}</button></div>
-      <div class="mc-wd">${WD.map((w, i) => `<span class="${wdClass(i)}">${w}</span>`).join('')}</div>
+      <div class="mc-wd">${ORD.map((o) => `<span class="${wdClass(o)}">${WD[o]}</span>`).join('')}</div>
       <div class="mc-grid"></div>
     </div>
     <div class="ed-sec">
       <div class="cap">반복</div>
       <div class="rep-chips">${reps.map(([v, l]) => `<button type="button" data-repv="${v}">${l}</button>`).join('')}</div>
-      <div class="day-chips" hidden>${WD.map((w, i) => `<button type="button" data-day="${i}" class="${wdClass(i)}">${w}</button>`).join('')}</div>
+      <div class="day-chips" hidden>${ORD.map((o) => `<button type="button" data-day="${o}" class="${wdClass(o)}">${WD[o]}</button>`).join('')}</div>
       <label class="ck rep-forever" hidden><input type="checkbox" name="forever">끝 날짜 없이 계속 반복</label>
       <p class="rep-sum"></p>
     </div>
@@ -922,7 +926,7 @@ function edSummary(f) {
       : `${dLabel(st.sd)} ${f.start.value} → ${dLabel(st.ed)} ${f.end.value} · ${n}일에 걸쳐`;
   }
   const what = st.rep === 'daily' ? '매일'
-    : st.rep === 'weekly' ? `매주 ${[...st.days].sort((a, b) => a - b).map((i) => WD[i]).join('·')}`
+    : st.rep === 'weekly' ? `매주 ${[...st.days].sort((a, b) => ORD.indexOf(a) - ORD.indexOf(b)).map((i) => WD[i]).join('·')}`
       : `매월 ${parseKey(st.sd).getDate()}일`;
   let count = '';
   if (st.until) {
@@ -961,7 +965,7 @@ function edSync(f) {
   let h = '';
   for (let i = 0; i < 42; i++) {
     const k = addDays(gs, i);
-    const c = ['mc-d', wdClass(i % 7)];
+    const c = ['mc-d', colCls(i % 7)];
     if (parseKey(k).getMonth() !== a.getMonth()) c.push('out');
     if (k === today) c.push('today');
     if (k === st.sd) c.push('rs');

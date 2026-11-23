@@ -140,7 +140,7 @@ body[data-view='calendar'] main { max-width: 1800px; }
 .day-seg { display: none; }
 
 /* 일정 색 */
-.c-blue { --c: #3f5fa8; --c-bg: #e8eef9; --c-ink: #24406f; } /* 저장 버튼과 같은 파랑 */
+.c-blue { --c: #3f5fa8; --c-bg: #e8eef9; --c-ink: #24406f; --c-ad: #2b8fe0; --c-ad-ink: #fff; } /* 저장 버튼과 같은 파랑 */
 .c-green { --c: #3e9466; --c-bg: #e3f3ea; --c-ink: #1d5638; }
 .c-pink { --c: #d2577f; --c-bg: #fbe7ee; --c-ink: #7a2242; }
 .c-yellow { --c: #c79417; --c-bg: #fdf2d6; --c-ink: #684d05; }
@@ -673,7 +673,7 @@ mark { background: #ffe58a; color: inherit; border-radius: 3px; padding: 0 1px; 
 }
 .mi { border-left: 3px solid var(--c); }
 /* 하루짜리 '하루 종일' 일정: 연한 파랑 (여러 날 막대는 진한 파랑, 시간 일정은 아주 옅은 바탕 + 왼쪽 선) */
-.mi.ad { background: color-mix(in srgb, var(--c) 30%, #fff); color: var(--c-ink); border-left: 0; font-weight: 700; }
+.mi.ad { background: var(--c-ad, color-mix(in srgb, var(--c) 30%, #fff)); color: var(--c-ad-ink, var(--c-ink)); border-left: 0; font-weight: 700; }
 .mi b { font-weight: 800; margin-right: 4px; }
 .mb { background: var(--c); color: #fff; font-weight: 700; }
 .mb.cl { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }

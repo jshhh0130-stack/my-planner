@@ -22,7 +22,8 @@ export const dayDiff = (a, b) => Math.round((parseKey(b) - parseKey(a)) / 864000
 export const wdIdx = (k) => (parseKey(k).getDay() + 6) % 7;
 export const WD = ['월', '화', '수', '목', '금', '토', '일'];
 export const WD_FULL = WD.map((w) => `${w}요일`);
-export const startOfWeek = (k) => addDays(k, -wdIdx(k));
+// 한 주는 일요일부터 (갤럭시 달력처럼)
+export const startOfWeek = (k) => addDays(k, -((wdIdx(k) + 1) % 7));
 
 export const toMin = (t) => {
   if (!t) return 0;
