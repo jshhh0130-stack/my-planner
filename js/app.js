@@ -7,8 +7,8 @@ import {
   toMin, fromMin, clamp, uid, esc, escRe, hhmm, richText, md, relLabel,
 } from './util.js';
 
-const H0 = 5;   // 시간표 시작 05시 (교수님 양식과 같게)
-const H1 = 24;  // 23시 칸까지
+const H0 = 0;   // 시간표: 하루 전체 (00시~24시)
+const H1 = 24;
 const TOTAL = (H1 - H0) * 60;
 const SETUP_URL = 'https://github.com/jshhh0130-stack/my-planner/blob/main/SETUP.md';
 
@@ -168,7 +168,7 @@ function render(opts = {}) {
   if (S.view === 'calendar' && S.cal.mode === 'week' && !S.cal.scrolled) {
     const w = $view.querySelector('.wk-scroll');
     if (w && w.scrollHeight > w.clientHeight + 4) {
-      w.scrollTop = hourPx() * 2; // 07:00부터 보이게
+      w.scrollTop = hourPx() * (7 - H0); // 07:00부터 보이게
       S.cal.scrolled = true;
     }
   }
@@ -1600,7 +1600,7 @@ function onClick(e) {
       render();
       break;
     case 'ink-color': INK.color = a.dataset.c; INK.eraser = false; localStorage.setItem('inkColor', INK.color); updatePenBar(); break;
-    case 'ink-width': INK.width = +a.dataset.w; INK.eraser = false; localStorage.setItem('inkWidth', String(INK.width)); updatePenBar(); break;
+    case 'ink-wstep': setInkLevel(inkLevel() + +a.dataset.n); break;
     case 'ink-eraser': INK.eraser = !INK.eraser; updatePenBar(); break;
     case 'ink-undo': inkUndo(); break;
     case 'ink-clear': inkClear(); break;
@@ -1667,6 +1667,7 @@ function onClick(e) {
 function onInput(e) {
   const el = e.target;
   if (el.matches?.('[data-msearch]')) { memoSearchInput(el.value); return; }
+  if (el.matches?.('[data-ink-w]')) { setInkLevel(+el.value); return; }
   if (el.dataset.memo) { setDraft(el.dataset.memo, el.value); autoGrow(el); return; }
   if (el.matches('[data-note-edit]')) { autoGrow(el); return; }
   const b = el.dataset.bind;
@@ -1860,7 +1861,6 @@ function afterTap(pointerType, fn) {
    펜 모드: 펜(또는 마우스)으로 시간표 전체에 자유롭게 쓰기, 손가락은 화면 이동.
    좌표는 칸 크기에 대한 비율(0~1)로 저장 → 노트북·패드·핸드폰 어디서 봐도 같은 시간 위치에 보임 */
 const INK_COLORS = ['#1f2329', '#3f5fa8', '#d0453f'];
-const INK_WIDTHS = [[1.4, '가늘게'], [2.4, '보통'], [4, '굵게'], [6.5, '아주 굵게']];
 const INK = {
   date: null, backend: null, unsub: null, strokes: [], ops: [],
   color: localStorage.getItem('inkColor') || INK_COLORS[0],
@@ -1874,7 +1874,7 @@ function penBarHTML() {
   return `<div class="pen-bar">
     ${INK_COLORS.map((c) => `<button class="pen-c ${!INK.eraser && INK.color === c ? 'on' : ''}" style="--pc:${c}" data-act="ink-color" data-c="${c}" aria-label="펜 색"></button>`).join('')}
     <span class="pen-sep"></span>
-    ${INK_WIDTHS.map(([w, name]) => `<button class="pen-w ${!INK.eraser && INK.width === w ? 'on' : ''}" data-act="ink-width" data-w="${w}" title="${name}" aria-label="펜 굵기 ${name}"><i style="width:${Math.round(w * 2 + 2)}px;height:${Math.round(w * 2 + 2)}px;background:${INK.color}"></i></button>`).join('')}
+    <span class="pen-wbox">굵기<button class="icon-btn sm" data-act="ink-wstep" data-n="-1" aria-label="얇게">－</button><input type="range" min="1" max="30" step="1" value="${inkLevel()}" data-ink-w aria-label="펜 굵기 1~30"><button class="icon-btn sm" data-act="ink-wstep" data-n="1" aria-label="굵게">＋</button><b class="ink-wv">${inkLevel()}</b><span class="ink-wdot-box"><i class="ink-wdot"></i></span></span>
     <span class="pen-sep"></span>
     <button class="tool ${INK.eraser ? 'on' : ''}" data-act="ink-eraser">지우개</button>
     <button class="tool" data-act="ink-undo">되돌리기</button>
@@ -1885,8 +1885,33 @@ function penBarHTML() {
   </div>`;
 }
 
+// 펜 움직임: 지원하면 화면 그리기 주기를 기다리지 않는 pointerrawupdate로 더 빨리 받음
+const MOVE_EVT = 'onpointerrawupdate' in window ? 'pointerrawupdate' : 'pointermove';
+
+// 굵기 1~30 (1 = 아주 얇게)
+const inkLevel = () => clamp(Math.round(INK.width * 2), 1, 30);
+function setInkLevel(v) {
+  v = clamp(Math.round(v) || 1, 1, 30);
+  INK.width = v / 2;
+  INK.eraser = false;
+  localStorage.setItem('inkWidth', String(INK.width));
+  const box = $view.querySelector('.pen-wbox');
+  if (box) {
+    const r = box.querySelector('[data-ink-w]');
+    if (+r.value !== v) r.value = v;
+    box.querySelector('.ink-wv').textContent = v;
+  }
+  updatePenBar();
+}
+
 function updatePenBar() {
   $view.querySelectorAll('.pen-c').forEach((b) => b.classList.toggle('on', !INK.eraser && b.dataset.c === INK.color));
+  const dot = $view.querySelector('.ink-wdot');
+  if (dot) { // 실제 그려질 굵기를 점으로 미리 보기
+    const px = clamp((INK.width * (INK.W || 400)) / 400, 1, 26);
+    dot.style.width = dot.style.height = `${px}px`;
+    dot.style.background = INK.color;
+  }
   $view.querySelectorAll('.pen-w').forEach((b) => {
     b.classList.toggle('on', !INK.eraser && +b.dataset.w === INK.width);
     const dot = b.querySelector('i');
@@ -1900,13 +1925,14 @@ function parseInk(doc) {
   return doc.strokes.map((s) => {
     const n = String(s.p || '').split(/[ ,]/).map(Number);
     const pts = [];
-    for (let i = 0; i + 1 < n.length; i += 2) if (Number.isFinite(n[i]) && Number.isFinite(n[i + 1])) pts.push([n[i] / 10000, n[i + 1] / 10000]);
+    const old = s.r !== 1; // 예전 필기(05~24시 범위)는 하루 전체 범위 위치로 옮김
+    for (let i = 0; i + 1 < n.length; i += 2) if (Number.isFinite(n[i]) && Number.isFinite(n[i + 1])) pts.push([n[i] / 10000, old ? (300 + (n[i + 1] / 10000) * 1140 - H0 * 60) / TOTAL : n[i + 1] / 10000]);
     return { c: typeof s.c === 'string' ? s.c : INK_COLORS[0], w: +s.w || 2.4, pts };
   }).filter((s) => s.pts.length);
 }
 
 const encodeInk = (strokes) => strokes.map((s) => ({
-  c: s.c, w: s.w, p: s.pts.map(([x, y]) => `${Math.round(x * 10000)},${Math.round(y * 10000)}`).join(' '),
+  c: s.c, w: s.w, r: 1, p: s.pts.map(([x, y]) => `${Math.round(x * 10000)},${Math.round(y * 10000)}`).join(' '),
 }));
 
 function saveInkNow() {
@@ -1938,9 +1964,11 @@ function attachInk() {
     });
   }
   INK.canvas = cv;
-  INK.ctx = cv.getContext('2d');
+  // 저지연 그리기: 화면에 바로 반영 (펜이 빠릿하게)
+  INK.ctx = cv.getContext('2d', { desynchronized: true }) || cv.getContext('2d');
   sizeInk();
   drawInk();
+  if (S.pen) updatePenBar(); // 굵기 미리보기 점 크기 맞추기
   cv.addEventListener('pointerdown', inkDown);
 }
 
@@ -1960,7 +1988,7 @@ function sizeInk() {
 function strokePath(ctx, s, W, H) {
   const p = s.pts;
   ctx.strokeStyle = s.c;
-  ctx.lineWidth = Math.max(1.2, (s.w * W) / 400);
+  ctx.lineWidth = Math.max(0.35, (s.w * W) / 400);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.beginPath();
@@ -1981,7 +2009,7 @@ function drawInk() {
 }
 
 function inkPoint(e) {
-  const r = INK.canvas.getBoundingClientRect();
+  const r = INK.rect || INK.canvas.getBoundingClientRect(); // 쓰는 동안은 위치를 한 번만 재서 빠르게
   return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)];
 }
 
@@ -2005,11 +2033,11 @@ function inkMove(pt) {
   if (!cur) return;
   if (cur.erase) { eraseAt(pt); return; }
   const last = cur.pts[cur.pts.length - 1];
-  if (Math.hypot((pt[0] - last[0]) * INK.W, (pt[1] - last[1]) * INK.H) < 1) return;
+  if (Math.hypot((pt[0] - last[0]) * INK.W, (pt[1] - last[1]) * INK.H) < 0.5) return;
   cur.pts.push(pt);
   const ctx = INK.ctx;
   ctx.strokeStyle = cur.c;
-  ctx.lineWidth = Math.max(1.2, (cur.w * INK.W) / 400);
+  ctx.lineWidth = Math.max(0.35, (cur.w * INK.W) / 400);
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(last[0] * INK.W, last[1] * INK.H);
@@ -2081,6 +2109,7 @@ function inkDown(e) {
   e.preventDefault();
   try { INK.canvas.setPointerCapture(e.pointerId); } catch { /* 무시 */ }
   sizeInk();
+  INK.rect = INK.canvas.getBoundingClientRect(); // 한 획 동안은 위치 고정
   const pt = inkPoint(e);
   if (INK.eraser || penButton(e)) {
     INK.cur = { erase: true, removed: [] };
@@ -2102,7 +2131,8 @@ function inkDown(e) {
     for (const c of list.length ? list : [m]) inkMove(inkPoint(c));
   };
   const cleanup = () => {
-    cv.removeEventListener('pointermove', move);
+    cv.removeEventListener(MOVE_EVT, move);
+    INK.rect = null;
     removeEventListener('pointerup', up);
     removeEventListener('pointercancel', up);
   };
@@ -2112,7 +2142,7 @@ function inkDown(e) {
     if (e.pointerType === 'pen') INK.lastPen = Date.now();
     inkEnd();
   };
-  cv.addEventListener('pointermove', move);
+  cv.addEventListener(MOVE_EVT, move);
   addEventListener('pointerup', up);
   addEventListener('pointercancel', up);
 }

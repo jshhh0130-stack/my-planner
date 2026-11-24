@@ -704,6 +704,12 @@ canvas.ink { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3
 .pen-w:hover { background: var(--bg2); }
 .pen-w.on { border-color: var(--ink); background: var(--bg2); }
 .pen-sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
+/* 펜 굵기 1~30 슬라이더 */
+.pen-wbox { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: var(--ink2); }
+.pen-wbox input[type='range'] { width: 130px; accent-color: var(--accent); }
+.pen-wbox .ink-wv { min-width: 22px; text-align: center; color: var(--ink); }
+.ink-wdot-box { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--bg2); }
+.ink-wdot { display: block; border-radius: 50%; }
 .pen-bar .tool.on { background: var(--ink); color: #fff; }
 .pen-bar .ck { margin-left: 4px; font-size: 13px; }
 
